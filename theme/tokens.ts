@@ -254,7 +254,8 @@ export const motion = {
 
 /** Layout guards for the two target Android viewports (390x844, 412x915). */
 export const layout = {
-  screenPaddingX: spacing.lg,
+  /** 18px gutters, measured from the design's screen frames. */
+  screenPaddingX: 18,
   maxContentWidth: 560,
   cardGap: spacing.md,
 } as const;

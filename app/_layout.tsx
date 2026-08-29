@@ -2,7 +2,6 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -10,7 +9,7 @@ import { ErrorBoundary } from '@/components/shared';
 import { ToastProvider } from '@/components/ui';
 import { SessionProvider } from '@/features/auth/SessionProvider';
 import { ThemeProvider, useAppFonts } from '@/theme';
-import { darkColors, lightColors } from '@/theme/tokens';
+import { lightColors } from '@/theme/tokens';
 
 /**
  * Root layout - the app shell.
@@ -35,7 +34,6 @@ void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useAppFonts();
-  const scheme = useColorScheme();
 
   useEffect(() => {
     // Proceed on font failure too: a missing webfont must not brick the app.
@@ -50,7 +48,8 @@ export default function RootLayout() {
     return null;
   }
 
-  const background = scheme === 'dark' ? darkColors.bg : lightColors.bg;
+  // Matches ThemeProvider: light is the primary palette.
+  const background = lightColors.bg;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: background }}>
@@ -59,7 +58,7 @@ export default function RootLayout() {
           <ErrorBoundary label="Shoogle">
             <SessionProvider>
               <ToastProvider>
-                <StatusBar style="auto" />
+                <StatusBar style="dark" />
                 <Stack
                   screenOptions={{
                     headerShown: false,

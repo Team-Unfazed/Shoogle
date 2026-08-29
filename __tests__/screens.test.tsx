@@ -18,9 +18,15 @@ import { ThemeProvider } from '@/theme';
  * made controllable here. It defaults to false, matching a fresh clone.
  */
 let mockSupabaseConfigured = false;
+let mockFixtures = false;
 jest.mock('@/lib/env', () => {
   const actual = jest.requireActual('@/lib/env');
-  return { ...actual, isSupabaseConfigured: () => mockSupabaseConfigured };
+  return {
+    ...actual,
+    isSupabaseConfigured: () => mockSupabaseConfigured,
+    isFixtureModeEnabled: () => mockFixtures,
+    isDevPreviewEnabled: () => false,
+  };
 });
 
 jest.mock('@/lib/supabase/client', () => ({
@@ -57,14 +63,53 @@ function renderScreen(name: string, Component: () => React.JSX.Element) {
 }
 
 describe('Home', () => {
-  it('renders without crashing and shows no invented data', async () => {
+  afterEach(() => {
+    mockFixtures = false;
+  });
+
+  it('shows an honest empty state when no data source exists', async () => {
+    mockFixtures = false;
     await renderScreen('home', HomeScreen);
-    expect(screen.getByTestId('screen-home')).toBeOnTheScreen();
+
     expect(screen.getByText('Nothing to act on yet')).toBeOnTheScreen();
-    expect(screen.getByText('No data source connected')).toBeOnTheScreen();
-    // No metric, score or percentage is fabricated on an unconfigured build.
+    // Nothing from the demo business leaks into a build without fixtures.
+    expect(screen.queryByText('Vahan Ready')).toBeNull();
+    expect(screen.queryByText('1,204')).toBeNull();
+    expect(screen.queryByTestId('fixture-banner')).toBeNull();
+    // No metric is fabricated, and nothing renders as a placeholder zero.
     expect(screen.queryByText('0')).toBeNull();
     expect(screen.queryByText('0%')).toBeNull();
+  });
+
+  it('renders the designed layout when fixtures are on, clearly labelled', async () => {
+    mockFixtures = true;
+    await renderScreen('home', HomeScreen);
+
+    // The wireframe's structure, in order.
+    expect(screen.getByText('Vahan Ready')).toBeOnTheScreen();
+    expect(screen.getByText('Shoogle suggests')).toBeOnTheScreen();
+    expect(screen.getByText('Monday morning post ready')).toBeOnTheScreen();
+    expect(screen.getByText('Google views')).toBeOnTheScreen();
+    expect(screen.getByText('1,204')).toBeOnTheScreen();
+    expect(screen.getByText('Social')).toBeOnTheScreen();
+    expect(screen.getByText('SEO / Local')).toBeOnTheScreen();
+    expect(screen.getByText('Website')).toBeOnTheScreen();
+
+    // ...and it can never be mistaken for the owner's real data.
+    expect(screen.getByTestId('fixture-banner')).toBeOnTheScreen();
+  });
+
+  it('distinguishes a real zero change from an unknown one', async () => {
+    mockFixtures = true;
+    await renderScreen('home', HomeScreen);
+    // The Calls metric genuinely did not move, which the design renders as "— 0%".
+    expect(screen.getByText('— 0%')).toBeOnTheScreen();
+  });
+
+  it('keeps skip one tap away, per product rule 5', async () => {
+    mockFixtures = true;
+    await renderScreen('home', HomeScreen);
+    expect(screen.getByRole('button', { name: 'Skip this suggestion' })).toBeOnTheScreen();
   });
 });
 

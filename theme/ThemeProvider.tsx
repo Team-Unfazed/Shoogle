@@ -71,11 +71,18 @@ export interface ThemeProviderProps {
   children: React.ReactNode;
   /** Force a scheme. Used by tests and by the dark-mode preview in Settings. */
   forceScheme?: 'light' | 'dark';
+  /**
+   * Follow the device theme. OFF by default: light is the design's primary
+   * palette, and following the system silently turned the whole app black on a
+   * phone set to dark mode. Dark tokens are complete and tested - turn this on
+   * only when we deliberately decide to ship dark mode.
+   */
+  followSystem?: boolean;
 }
 
-export function ThemeProvider({ children, forceScheme }: ThemeProviderProps) {
+export function ThemeProvider({ children, forceScheme, followSystem = false }: ThemeProviderProps) {
   const system = useColorScheme();
-  const scheme = forceScheme ?? (system === 'dark' ? 'dark' : 'light');
+  const scheme = forceScheme ?? (followSystem && system === 'dark' ? 'dark' : 'light');
   const value = useMemo(() => (scheme === 'dark' ? darkTheme : lightTheme), [scheme]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

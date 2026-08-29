@@ -373,3 +373,111 @@ Everything from sessions 1 and 2, plus:
 Unchanged: **Sunny** registers a real `signInWithEmail` handler via
 `registerSignInHandler(...)`. Once that exists, preview mode becomes a
 convenience rather than the only way in, and can eventually be retired.
+
+---
+
+## Date
+
+2026-08-30 (session 4 — light theme + Home built to the wireframe)
+
+## What I changed
+
+Two problems reported after the first device run, both legitimate.
+
+**1. The app rendered black.** `userInterfaceStyle: 'automatic'` made it follow
+the device theme, and the test phone was in dark mode. The design project's
+primary palette is light; dark was only a secondary variant.
+
+- `app.config.ts` -> `userInterfaceStyle: 'light'`.
+- `ThemeProvider` now defaults to light and only follows the system when
+  explicitly passed `followSystem`. Dark tokens remain complete and tested.
+- Root layout no longer derives its background from `useColorScheme`, and the
+  status bar is pinned to `dark` content.
+
+**2. Home looked nothing like the wireframe.** Session 1 shipped empty
+placeholder cards, reading "do not start feature implementation" as "ship empty
+scaffolding". But "design matches imported wireframes" was an explicit
+deliverable, and empty cards match nothing. That was a misjudgement.
+
+Rebuilt Home against `Shoogle Home.dc.html`, transcribing its measurements:
+
+- business switcher (42px tile, radius 13) with notification bell + unread dot
+- the gradient-ringed "Shoogle suggests" card (2px ring, blue -> green)
+- horizontal insight strip (186px chips)
+- 3-up metric row (radius 16, Sora 20px values)
+- connection alert row (redSoft, 34px badge)
+- three module rows (radius 20, 46px tiles at radius 15)
+- page gutters corrected from 16 to **18px** to match the design frames
+
+## Files changed
+
+```
+app.config.ts                                  (light theme)
+theme/ThemeProvider.tsx                        (followSystem, default light)
+theme/tokens.ts                                (screenPaddingX 18)
+app/_layout.tsx                                (light background, dark status bar)
+app/(tabs)/index.tsx                           (rebuilt to the wireframe)
+features/dashboard/components/HomeParts.tsx    (new — Home composition pieces)
+fixtures/home.ts                               (new — the design's demo business)
+eslint.config.js                               (fixtures allowed in app/, still
+                                                blocked in data layers)
+__tests__/screens.test.tsx                     (both Home paths covered)
+```
+
+## Decisions made
+
+1. **Light is the app's palette; the system theme is not followed.** Shipping
+   dark mode is a deliberate decision, not something a user's phone setting
+   makes for us. `followSystem` exists for when we choose to.
+2. **Home renders the design's own demo business as a labelled fixture.** The
+   wireframe shows real-looking numbers (1,204 views, 2,412 reach). Those cannot
+   be presented as the owner's data, so they come from `fixtures/home.ts`, are
+   reachable only in development, and always carry a banner. The layout is
+   therefore reviewable without anything being claimed as real.
+3. **Layout components take props and never import fixtures.**
+   `HomeParts.tsx` is pure presentation, so swapping fixtures for real
+   `DataState` values changes only the screen, not the components.
+4. **ESLint now permits fixtures in `app/**` but still blocks `lib/**` and
+   feature data layers.** A screen is where fixture data becomes visible and is
+   banner-marked; a data layer is where it would be laundered into something
+   believed real. Verified both directions.
+5. **`MetricTile` keeps `number | null`.** The design's "Calls — 0%" is a
+   genuine zero change and renders as such, which is still distinct from
+   unknown.
+
+## Current state
+
+- typecheck, lint pass. **83 tests, 5 suites**, all passing.
+- Android bundle exports cleanly.
+- Home matches the wireframe in light mode. Posts, Business and Settings are
+  still foundation placeholders and do NOT match their designs yet.
+
+## Known issues
+
+Carried over: placeholder icons/splash, no `EAS_PROJECT_ID`, no Supabase schema
+or RLS, no auth handler. Plus:
+
+1. **Only Home matches the design.** Posts, Business and Settings still render
+   generic empty states. The design has 46 screens; 1 is built.
+2. **Home's actions are not wired.** "Review & schedule", "3 more" and the
+   module rows either toast "not built yet" or navigate to a placeholder tab.
+   They deliberately do not pretend to work.
+
+## Things future engineers must NOT change
+
+Everything from sessions 1-3, plus:
+
+- **Do not re-enable `userInterfaceStyle: 'automatic'`** or default
+  `ThemeProvider` to `followSystem` without an explicit product decision.
+- **Do not let `HomeParts.tsx` import fixtures or fetch anything.** It takes
+  props. That is what makes the swap to real data a one-file change.
+- **Do not remove the fixture banner from Home** or widen the ESLint exception
+  beyond `app/**`.
+
+## Next recommended step
+
+Decide the order: either **(a)** build Posts, Business and Settings to their
+wireframes the same way — layout components plus labelled fixtures — so the
+whole shell is reviewable, or **(b)** stop UI work and let Sunny wire real auth
+and Supabase so Home can move from fixtures to real `DataState` values. (a) is
+faster to review; (b) is closer to launch.

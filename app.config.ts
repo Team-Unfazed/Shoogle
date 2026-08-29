@@ -19,7 +19,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: 'portrait',
   scheme: 'shoogle',
   icon: './assets/images/icon.png',
-  userInterfaceStyle: 'automatic',
+  // Light is the design's primary palette. Dark tokens exist and are tested,
+  // but the app does not follow the system theme until we deliberately ship it.
+  userInterfaceStyle: 'light',
   // Design token --bg (light). Keeps the frame from flashing white/black.
   backgroundColor: '#f5f6f8',
   primaryColor: '#2f7ad6',

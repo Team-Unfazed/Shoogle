@@ -43,6 +43,24 @@ module.exports = defineConfig([
     rules: { 'no-restricted-imports': 'off' },
   },
   {
+    /**
+     * Route screens under app/ MAY import fixtures.
+     *
+     * A screen is where fixture data becomes visible, so it is also where the
+     * "Fixture data" banner is rendered — that pairing is the point. What must
+     * never touch fixtures is a DATA layer (lib/, provider implementations,
+     * repositories), because there the fixture would be laundered into
+     * something a screen believes is real. Those stay blocked by the rule above.
+     *
+     * The binding guarantee is not lint, it is the runtime gate:
+     * `isFixtureModeEnabled()` requires __DEV__ plus an explicit flag, and both
+     * non-development EAS profiles set that flag to "0". A release build cannot
+     * reach this code at all. `__tests__/dev-preview.test.tsx` pins that.
+     */
+    files: ['app/**/*.tsx'],
+    rules: { 'no-restricted-imports': 'off' },
+  },
+  {
     // Tests and the fixtures folder may use fixtures freely.
     files: [
       '**/__tests__/**',
