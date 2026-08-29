@@ -1,46 +1,55 @@
 import Constants from 'expo-constants';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ErrorBoundary, Screen, TopBar } from '@/components/shared';
-import {
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Dialog,
-  Divider,
-  PageHeader,
-  Section,
-  Text,
-  useToast,
-} from '@/components/ui';
+import { ErrorBoundary, FixtureBanner } from '@/components/shared';
+import { Dialog, Text, useToast } from '@/components/ui';
 import { useSession } from '@/features/auth/SessionProvider';
+import {
+  AccountCard,
+  SettingsGroup,
+  SettingsRow,
+  SettingsToggle,
+} from '@/features/dashboard/components/SettingsParts';
+import { settingsFixture } from '@/fixtures/settings';
 import { isFixtureModeEnabled, missingRequiredEnvNames } from '@/lib/env';
 import { useTheme } from '@/theme';
 
 /**
- * SETTINGS TAB - foundation. Feature owner: Aryan.
+ * SETTINGS TAB. Feature owner: Aryan.
  *
- * Ships two things the foundation genuinely owns:
- *   1. Sign out (the only auth action the shell needs).
- *   2. A Diagnostics block naming which environment VARIABLES are missing -
- *      names only, never values. This is what makes a broken local setup
- *      obvious instead of mysterious.
+ * Laid out to match the `settings` screen in "Shoogle Website.dc.html":
+ * account card, then Business / Team / Preferences / Account groups, and a
+ * version footer.
  *
- * Everything else (profile editing, employees, subscription, notification
- * preferences) belongs to Aryan's feature work and is intentionally absent.
+ * WHAT IS REAL HERE
+ * -----------------
+ * Sign out genuinely signs you out, and Diagnostics names the environment
+ * VARIABLES that are missing — names only, never values. Those two are not
+ * fixtures. Everything else on this screen is a labelled placeholder until
+ * Aryan builds it, and each row says so rather than opening an empty screen.
  */
 export default function SettingsScreen() {
   const theme = useTheme();
   const toast = useToast();
-  const { state, signOut } = useSession();
+  const insets = useSafeAreaInsets();
+  const { state, signOut, isPreview } = useSession();
+
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
 
   const user = state.status === 'ready' ? state.value : null;
+  const data = isFixtureModeEnabled() || isPreview ? settingsFixture : null;
+  const showFixtureBanner = data !== null && !isPreview;
+
   const missingEnv = missingRequiredEnvNames();
   const appVersion = Constants.expoConfig?.version ?? 'unknown';
+
+  const notBuilt = (what: string) => () =>
+    toast.show({ message: `${what} is not built yet.`, tone: 'neutral' });
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -56,108 +65,141 @@ export default function SettingsScreen() {
   };
 
   return (
-    <Screen
-      testID="screen-settings"
-      header={<TopBar showBack={false} />}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.bg, paddingTop: insets.top + 8 }}>
       <ErrorBoundary label="Settings">
-        <PageHeader title="Settings" />
+        <View style={{ paddingHorizontal: 18, paddingBottom: 10 }}>
+          <Text
+            accessibilityRole="header"
+            style={{
+              fontFamily: theme.fontFamily.display,
+              fontSize: 24,
+              letterSpacing: -0.48,
+              color: theme.colors.text,
+            }}>
+            Settings
+          </Text>
+        </View>
 
-        <Card style={{ marginTop: theme.spacing.lg }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Avatar name={user?.displayName ?? user?.email ?? 'Shoogle user'} size={48} />
-            <View style={{ flex: 1, marginLeft: theme.spacing.md, minWidth: 0 }}>
-              <Text variant="cardTitle" numberOfLines={1}>
-                {user?.displayName ?? 'Your account'}
-              </Text>
-              <Text variant="caption" tone="muted" numberOfLines={1}>
-                {user?.email ?? 'Not signed in'}
-              </Text>
-            </View>
-          </View>
-        </Card>
+        <ScrollView
+          testID="screen-settings"
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 10, paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}>
+          {showFixtureBanner ? <FixtureBanner /> : null}
 
-        <Section title="Account">
-          <Card padded={false}>
-            <View style={{ padding: theme.spacing.lg }}>
-              <Button
-                label="Sign out"
-                variant="secondary"
-                size="medium"
-                onPress={() => setConfirmingSignOut(true)}
-                accessibilityHint="Signs you out of Shoogle on this device"
-              />
-            </View>
-          </Card>
-        </Section>
+          <AccountCard
+            businessName={data?.account.businessName ?? 'Your business'}
+            initials={data?.account.initials ?? '?'}
+            ownerLine={data?.account.ownerLine ?? (user?.email ?? 'Not signed in')}
+            onSwitch={data ? notBuilt('Switching business') : undefined}
+          />
 
-        <Section title="Diagnostics" subtitle="Shown to help set up this build.">
-          <Card>
-            <Row label="App version" value={appVersion} />
-            <Divider spacing={theme.spacing.md} />
-            <Row
+          <SettingsGroup title="Business">
+            <SettingsRow label="Business information" onPress={notBuilt('Business information')} />
+            <SettingsRow label="Logo & brand" onPress={notBuilt('Logo and brand')} />
+            <SettingsRow
+              label="Connected accounts"
+              badge={data && data.connectedIssues > 0 ? `${data.connectedIssues} issue` : undefined}
+              onPress={notBuilt('Connected accounts')}
+              last
+            />
+          </SettingsGroup>
+
+          <SettingsGroup title="Team">
+            <SettingsRow
+              label="Employees"
+              value={data ? String(data.employees) : undefined}
+              onPress={notBuilt('Employees')}
+            />
+            <SettingsRow label="Roles & permissions" onPress={notBuilt('Roles and permissions')} last />
+          </SettingsGroup>
+
+          <SettingsGroup title="Preferences">
+            <SettingsToggle
+              label="Push notifications"
+              value={pushEnabled}
+              onChange={(next) => {
+                setPushEnabled(next);
+                toast.show({
+                  message: 'Notification delivery is not wired up yet.',
+                  tone: 'neutral',
+                });
+              }}
+            />
+            <SettingsToggle
+              label="WhatsApp alerts"
+              value={whatsappEnabled}
+              onChange={(next) => {
+                setWhatsappEnabled(next);
+                toast.show({ message: 'WhatsApp alerts are not wired up yet.', tone: 'neutral' });
+              }}
+            />
+            <SettingsRow
+              label="Labels"
+              value={data ? String(data.labels) : undefined}
+              onPress={notBuilt('Labels')}
+              last
+            />
+          </SettingsGroup>
+
+          <SettingsGroup title="Account">
+            <SettingsRow
+              label="Subscription"
+              value={data?.plan}
+              onPress={notBuilt('Subscription')}
+            />
+            <SettingsRow label="Help & support" onPress={notBuilt('Help and support')} />
+            {/* Real. This actually signs you out. */}
+            <SettingsRow
+              label="Log out"
+              destructive
+              showChevron={false}
+              onPress={() => setConfirmingSignOut(true)}
+              testID="settings-log-out"
+              last
+            />
+          </SettingsGroup>
+
+          {/* Real. Names only — never values. */}
+          <SettingsGroup title="Diagnostics">
+            <SettingsRow label="App version" value={appVersion} showChevron={false} />
+            <SettingsRow
               label="Backend"
               value={missingEnv.length === 0 ? 'Configured' : 'Not configured'}
-              accent={missingEnv.length === 0 ? 'green' : 'amber'}
+              showChevron={false}
+              last={missingEnv.length === 0}
             />
-            {missingEnv.length > 0 ? (
-              <View style={{ marginTop: theme.spacing.md }}>
-                <Text variant="caption" tone="muted">
-                  Missing from your .env.local (names only):
-                </Text>
-                {missingEnv.map((name) => (
-                  <Text key={name} variant="caption" tone="amber" style={{ marginTop: 4 }}>
-                    {name}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
+            {missingEnv.map((name, index) => (
+              <SettingsRow
+                key={name}
+                label={name}
+                value="missing"
+                showChevron={false}
+                last={index === missingEnv.length - 1}
+              />
+            ))}
+          </SettingsGroup>
 
-            {isFixtureModeEnabled() ? (
-              <>
-                <Divider spacing={theme.spacing.md} />
-                <Row label="Fixture mode" value="On (development)" accent="amber" />
-              </>
-            ) : null}
-          </Card>
-        </Section>
+          <Text
+            variant="caption"
+            tone="muted2"
+            align="center"
+            style={{ fontSize: 11.5, marginTop: 24 }}>
+            {`Shoogle v${appVersion} · Made for Indian businesses`}
+          </Text>
+        </ScrollView>
 
         <Dialog
           visible={confirmingSignOut}
-          title="Sign out?"
+          title="Log out?"
           message="You will need to sign in again to manage this business."
-          confirmLabel="Sign out"
+          confirmLabel="Log out"
           destructive
           busy={signingOut}
           onConfirm={handleSignOut}
           onCancel={() => setConfirmingSignOut(false)}
         />
       </ErrorBoundary>
-    </Screen>
-  );
-}
-
-function Row({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: 'green' | 'amber';
-}) {
-  return (
-    <View
-      accessible
-      accessibilityLabel={`${label}, ${value}`}
-      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-      <Text variant="body" tone="muted">
-        {label}
-      </Text>
-      {accent ? (
-        <Badge label={value} accent={accent} />
-      ) : (
-        <Text variant="bodyStrong">{value}</Text>
-      )}
     </View>
   );
 }

@@ -114,25 +114,57 @@ describe('Home', () => {
 });
 
 describe('Posts', () => {
-  it('renders and defaults to the Scheduled view', async () => {
-    await renderScreen('posts', PostsScreen);
-    expect(screen.getByTestId('screen-posts')).toBeOnTheScreen();
-    // Product rule 4: scheduling is the default posture.
-    expect(screen.getByRole('tab', { name: 'Scheduled' })).toBeSelected();
-    expect(screen.getByText('Nothing scheduled')).toBeOnTheScreen();
+  afterEach(() => {
+    mockFixtures = false;
   });
 
-  it('does not claim anything has been published', async () => {
+  it('shows an honest empty state when nothing is scheduled', async () => {
+    mockFixtures = false;
     await renderScreen('posts', PostsScreen);
-    expect(screen.getByText('Posts')).toBeOnTheScreen();
-    expect(screen.queryByText('Published 1')).toBeNull();
+
+    expect(screen.getByText('Nothing scheduled')).toBeOnTheScreen();
+    // Nothing from the demo business leaks in.
+    expect(screen.queryByText('Step-by-step licence renewal guide')).toBeNull();
+    // Product rule 5: the copy promises skip/pause, so it must say so.
+    expect(screen.getByText(/skip or pause/i)).toBeOnTheScreen();
+  });
+
+  it('renders the designed layout when fixtures are on', async () => {
+    mockFixtures = true;
+    await renderScreen('posts', PostsScreen);
+
+    expect(screen.getByText('NEXT UP · TOMORROW 9:00 AM')).toBeOnTheScreen();
+    // "Scheduled" is both a stat-tile label and a section heading.
+    expect(screen.getAllByText('Scheduled').length).toBeGreaterThanOrEqual(2);
+    // The same post is both the next-up card and the first scheduled row.
+    expect(screen.getAllByText('Step-by-step licence renewal guide').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Needs attention')).toBeOnTheScreen();
+    expect(screen.getByTestId('fixture-banner')).toBeOnTheScreen();
+  });
+
+  it('keeps Create post reachable, per product rule 4', async () => {
+    mockFixtures = true;
+    await renderScreen('posts', PostsScreen);
+    expect(screen.getByTestId('create-post')).toBeOnTheScreen();
+  });
+
+  it('only reports a result for a post that actually went out', async () => {
+    mockFixtures = true;
+    await renderScreen('posts', PostsScreen);
+    // The published row carries a real result; the failed one says why it failed.
+    expect(screen.getByText('2,412 reached · 84 saves')).toBeOnTheScreen();
+    expect(screen.getByText('Failed to publish')).toBeOnTheScreen();
   });
 });
 
 describe('Business', () => {
+  afterEach(() => {
+    mockFixtures = false;
+  });
+
   it('reports every provider as not connected', async () => {
+    mockFixtures = false;
     await renderScreen('business', BusinessScreen);
-    expect(screen.getByTestId('screen-business')).toBeOnTheScreen();
 
     // All four providers are listed by name...
     expect(screen.getByText('Google Business Profile')).toBeOnTheScreen();
@@ -144,10 +176,39 @@ describe('Business', () => {
     expect(screen.queryByText('Connected')).toBeNull();
   });
 
-  it('shows an unmeasured score rather than a zero', async () => {
+  it('shows unmeasured visibility rather than a zero', async () => {
+    mockFixtures = false;
     await renderScreen('business', BusinessScreen);
-    expect(screen.getByText('Not measured yet')).toBeOnTheScreen();
+    // Appears as the visibility headline and as the rankings subtitle.
+    expect(screen.getAllByText('Not measured yet').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('0')).toBeNull();
+    expect(screen.queryByText('1,204')).toBeNull();
+    // The rating shows a dash, not a zero.
+    expect(screen.getByText('—')).toBeOnTheScreen();
+  });
+
+  it('renders the designed SEO layout when fixtures are on', async () => {
+    mockFixtures = true;
+    await renderScreen('business', BusinessScreen);
+
+    expect(screen.getByText('Looking good')).toBeOnTheScreen();
+    expect(screen.getByText('1,204')).toBeOnTheScreen();
+    expect(screen.getByText('4.8')).toBeOnTheScreen();
+    expect(screen.getByText('Search rankings')).toBeOnTheScreen();
+    expect(screen.getByTestId('fixture-banner')).toBeOnTheScreen();
+  });
+
+  /**
+   * The important one. Fixture SEO content must never bleed into the real
+   * connection state: the registry is the only source for those rows.
+   */
+  it('still reports connections honestly while showing fixture content', async () => {
+    mockFixtures = true;
+    await renderScreen('business', BusinessScreen);
+
+    expect(screen.getByText('Looking good')).toBeOnTheScreen();
+    expect(screen.queryByText('Connected')).toBeNull();
+    expect(screen.getAllByText('Integration not built yet').length).toBeGreaterThan(0);
   });
 });
 

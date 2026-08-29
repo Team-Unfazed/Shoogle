@@ -1,55 +1,193 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ErrorBoundary, Screen, TopBar } from '@/components/shared';
-import { Badge, Card, Divider, PageHeader, Score, Section, Text } from '@/components/ui';
-import { ALL_PROVIDER_IDS, getProvider, getProviderDisplayName, isProviderRegistered } from '@/lib/providers';
-import { loading, type DataState } from '@/lib/state/DataState';
+import { ErrorBoundary, FixtureBanner } from '@/components/shared';
+import { Badge, Card, Divider, Text, useToast } from '@/components/ui';
+import { useSession } from '@/features/auth/SessionProvider';
+import {
+  AdviceCard,
+  BusinessNavRow,
+  GridMetric,
+  RatingRow,
+  VisibilityHero,
+} from '@/features/gbp/components/BusinessParts';
+import { businessFixture } from '@/fixtures/business';
+import { isFixtureModeEnabled } from '@/lib/env';
+import {
+  ALL_PROVIDER_IDS,
+  getProvider,
+  getProviderDisplayName,
+  isProviderRegistered,
+} from '@/lib/providers';
 import type { ConnectionInfo } from '@/lib/providers/types';
-import type { ProviderId } from '@/types/domain';
+import { loading, type DataState } from '@/lib/state/DataState';
 import { useTheme } from '@/theme';
+import type { ProviderId } from '@/types/domain';
 
 /**
- * BUSINESS TAB - foundation. Feature owner: Pranay (SEO / GBP / Audit).
+ * BUSINESS TAB. Feature owner: Pranay (SEO / GBP / Audit).
  *
- * This screen is NOT a placeholder: it reports the real, current connection
- * state of every provider by asking the provider registry. Today every answer
- * is "not connected", because no engineer has registered an implementation yet
- * - and saying so plainly is the correct, honest UI.
+ * Laid out to match the `seo` screen in "Shoogle SEO.dc.html": the visibility
+ * hero, a 2x2 metric grid, the rating summary, and navigation rows into
+ * rankings, Google posts and the business profile. The Website module is folded
+ * in here too, because the product spec has four tabs rather than the design's
+ * five.
  *
- * As soon as a feature calls `registerProvider(...)`, this screen starts
- * showing that provider's genuine state with no change to this file.
- *
- * The audit Score is `null` (not 0) because nothing has been measured.
+ * TWO SOURCES, DELIBERATELY DIFFERENT
+ * -----------------------------------
+ * The SEO content above the fold is a labelled development fixture, so the
+ * layout can be reviewed. The "Connected accounts" section at the bottom is
+ * REAL: it asks the provider registry and reports the truth, which today is
+ * "not connected" for everything. Fixture content sits under a banner; real
+ * state does not.
  */
 export default function BusinessScreen() {
   const theme = useTheme();
+  const toast = useToast();
+  const insets = useSafeAreaInsets();
+  const { isPreview } = useSession();
+
+  const data = isFixtureModeEnabled() || isPreview ? businessFixture : null;
+  const showFixtureBanner = data !== null && !isPreview;
+
+  const notBuilt = (what: string) => () =>
+    toast.show({ message: `${what} is not built yet.`, tone: 'neutral' });
 
   return (
-    <Screen
-      testID="screen-business"
-      header={<TopBar showBack={false} />}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.bg, paddingTop: insets.top + 8 }}>
       <ErrorBoundary label="Business">
-        <PageHeader title="Business" subtitle="Your profile and connected accounts." />
+        <View style={{ paddingHorizontal: 18, paddingBottom: 10 }}>
+          <Text
+            accessibilityRole="header"
+            style={{
+              fontFamily: theme.fontFamily.display,
+              fontSize: 24,
+              letterSpacing: -0.48,
+              color: theme.colors.text,
+            }}>
+            Business
+          </Text>
+        </View>
 
-        <Section title="Health">
-          <Card>
-            <View style={{ alignItems: 'center', paddingVertical: theme.spacing.sm }}>
-              {/* null, not 0 - no audit has run. */}
-              <Score value={null} label="Profile score" />
-              <Text
-                variant="caption"
-                tone="muted"
-                align="center"
-                style={{ marginTop: theme.spacing.md, maxWidth: 280 }}>
-                Shoogle scores your profile once it can read it. Connect an account to get started.
-              </Text>
-            </View>
-          </Card>
-        </Section>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: 18,
+            paddingTop: 8,
+            paddingBottom: 32,
+            gap: 14,
+          }}
+          showsVerticalScrollIndicator={false}>
+          {showFixtureBanner ? <FixtureBanner /> : null}
 
-        <Section title="Connected accounts" subtitle="Nothing is connected until you connect it.">
+          {data === null ? (
+            <VisibilityHero
+              label="YOUR LOCAL VISIBILITY"
+              headline="Not measured yet"
+              body="Connect Google Business Profile and Shoogle will measure how people find you."
+              filledSegments={null}
+              accent="neutral"
+            />
+          ) : (
+            <>
+              <VisibilityHero
+                label={data.visibility.label}
+                headline={data.visibility.headline}
+                body={data.visibility.body}
+                filledSegments={data.visibility.filledSegments}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 9 }}>
+                {data.metrics.slice(0, 2).map((m) => (
+                  <GridMetric
+                    key={m.key}
+                    label={m.label}
+                    value={m.value}
+                    delta={m.delta}
+                    deltaDirection={m.direction}
+                  />
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 9 }}>
+                {data.metrics.slice(2).map((m) => (
+                  <GridMetric
+                    key={m.key}
+                    label={m.label}
+                    value={m.value}
+                    delta={m.delta}
+                    deltaDirection={m.direction}
+                  />
+                ))}
+              </View>
+            </>
+          )}
+
+          <RatingRow
+            rating={data?.reviews.rating ?? null}
+            total={data?.reviews.total ?? null}
+            unanswered={data?.reviews.unanswered ?? 0}
+            onPress={notBuilt('Reviews')}
+          />
+
+          <BusinessNavRow
+            title="Search rankings"
+            subtitle={
+              data
+                ? `${data.rankings.tracked} keywords tracked · ${data.rankings.improved} improved`
+                : 'Not measured yet'
+            }
+            icon="trending-up"
+            accent="green"
+            onPress={notBuilt('Search rankings')}
+          />
+
+          <BusinessNavRow
+            title="Google Business posts"
+            subtitle={data ? data.gbpPosts.status : 'Not connected'}
+            subtitleTone={data?.gbpPosts.needsAttention ? 'red' : 'muted'}
+            glyph="G"
+            accent="green"
+            onPress={notBuilt('Google Business posts')}
+          />
+
+          <BusinessNavRow
+            title="Website"
+            subtitle={data ? data.website.status : 'Not started'}
+            subtitleTone={data?.website.needsAttention ? 'amber' : 'muted'}
+            icon="globe-outline"
+            accent="amber"
+            onPress={notBuilt('The website module')}
+          />
+
+          <BusinessNavRow
+            title="Business profile"
+            subtitle="Hours, areas, photos, details"
+            icon="list-outline"
+            onPress={notBuilt('The business profile editor')}
+          />
+
+          {data ? (
+            <AdviceCard
+              text={data.advice.text}
+              actionLabel={data.advice.actionLabel}
+              onPress={notBuilt('Creating a Google post')}
+            />
+          ) : null}
+
+          {/* ---------------------------------------------------------------
+              Real data below this line. The registry is asked directly, and
+              whatever it answers is what is shown.
+             --------------------------------------------------------------- */}
+          <Text
+            variant="label"
+            tone="muted2"
+            accessibilityRole="header"
+            style={{ marginTop: 8, letterSpacing: 0.8 }}>
+            Connected accounts
+          </Text>
+
           <Card padded={false}>
             {ALL_PROVIDER_IDS.map((id, index) => (
               <View key={id}>
@@ -58,9 +196,9 @@ export default function BusinessScreen() {
               </View>
             ))}
           </Card>
-        </Section>
+        </ScrollView>
       </ErrorBoundary>
-    </Screen>
+    </View>
   );
 }
 

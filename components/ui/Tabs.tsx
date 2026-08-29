@@ -57,7 +57,12 @@ export function Tabs<T extends string>({
       accessibilityLabel={accessibilityLabel}
       style={[
         styles.container,
-        { backgroundColor: theme.colors.card2, borderRadius: theme.radii.sm },
+        {
+          backgroundColor: theme.colors.card2,
+          borderColor: theme.colors.border,
+          // 13/4/36/10 geometry transcribed from the design's segmented control.
+          borderRadius: 13,
+        },
         style,
       ]}>
       <ScrollView
@@ -80,8 +85,8 @@ export function Tabs<T extends string>({
               style={({ pressed }) => [
                 styles.tab,
                 {
-                  minHeight: theme.control.chipHeight,
-                  borderRadius: theme.radii.sm - 3,
+                  minHeight: 36,
+                  borderRadius: 10,
                   backgroundColor: selected ? theme.colors.card : 'transparent',
                   paddingHorizontal: theme.spacing.lg,
                   opacity: pressed && !selected ? 0.7 : 1,
@@ -93,7 +98,8 @@ export function Tabs<T extends string>({
                 tone={selected ? 'default' : 'muted'}
                 numberOfLines={1}
                 style={{
-                  fontFamily: selected ? theme.fontFamily.bold : theme.fontFamily.medium,
+                  fontSize: 13,
+                  fontFamily: selected ? theme.fontFamily.bold : theme.fontFamily.semibold,
                 }}>
                 {item.count === undefined ? item.label : `${item.label} ${item.count}`}
               </Text>
@@ -106,7 +112,7 @@ export function Tabs<T extends string>({
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 3, overflow: 'hidden' },
+  container: { padding: 4, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   scroll: { alignItems: 'center' },
   tab: { alignItems: 'center', justifyContent: 'center', marginRight: 2 },
 });

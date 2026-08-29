@@ -481,3 +481,104 @@ wireframes the same way — layout components plus labelled fixtures — so the
 whole shell is reviewable, or **(b)** stop UI work and let Sunny wire real auth
 and Supabase so Home can move from fixtures to real `DataState` values. (a) is
 faster to review; (b) is closer to launch.
+
+---
+
+## Date
+
+2026-08-30 (session 5 — Posts, Business and Settings built to the wireframes)
+
+## What I changed
+
+Built the remaining three tabs against the design project, so the whole shell is
+now reviewable rather than just Home.
+
+**Posts** — from the `social` screen in "Shoogle Social.dc.html": next-up card
+(64px thumbnail at radius 12), three stat tiles at radius 15, and Scheduled /
+Needs attention / Published sections at radius 16, with the 54px floating
+Create post button.
+
+**Business** — from the `seo` screen in "Shoogle SEO.dc.html": visibility hero
+at radius 20 with five 6px strength segments, a 2x2 metric grid, the rating
+summary with its divider, and 44px navigation tiles at radius 14. The Website
+module is folded in here because the product spec has four tabs, not the
+design's five. The real "Connected accounts" section is kept below it.
+
+**Settings** — from the `settings` screen in "Shoogle Website.dc.html": account
+card, then Business / Team / Preferences / Account groups at radius 18 with
+hairline row separators, a 46x28 toggle drawn to the design, and the version
+footer.
+
+Also aligned the shared `Tabs` primitive to the design's segmented control
+(13px container, 4px padding, 36px items at radius 10) — it had been built from
+my own scale rather than measured.
+
+## Files changed
+
+```
+components/ui/Tabs.tsx                             (design geometry)
+app/(tabs)/posts.tsx                               (rebuilt)
+app/(tabs)/business.tsx                            (rebuilt)
+app/(tabs)/settings.tsx                            (rebuilt)
+features/social/components/PostsParts.tsx          (new)
+features/gbp/components/BusinessParts.tsx          (new)
+features/dashboard/components/SettingsParts.tsx    (new)
+fixtures/posts.ts  fixtures/business.ts  fixtures/settings.ts   (new)
+__tests__/screens.test.tsx                         (both paths per tab)
+```
+
+## Decisions made
+
+1. **Business mixes fixture and real data, visibly.** The SEO content is a
+   labelled fixture under a banner; the Connected accounts rows below it come
+   from the provider registry and still say "Not connected". A test asserts
+   fixture content does not bleed into connection state — that was the most
+   likely way this screen could start lying.
+2. **Settings keeps two genuinely real things**: log out actually signs you out,
+   and Diagnostics names missing environment VARIABLES (names only). Every
+   other row toasts "not built yet" rather than opening an empty screen.
+3. **No fake affordances anywhere.** Buttons that have no implementation say so
+   when pressed. Nothing silently does nothing.
+4. **`MediaPlaceholder` instead of hatched artwork.** The wireframe hatches
+   image tiles to mean "photo goes here"; with no media pipeline, a labelled
+   neutral tile reading "No image yet" says the same thing honestly.
+5. **All the honesty types survived the redesign.** `MetricTile`, `GridMetric`,
+   `StatTile`, `RatingRow` and `VisibilityHero` all take `| null` and render a
+   dash with a reason rather than a zero.
+
+## Current state
+
+- typecheck, lint pass. **87 tests, 5 suites**, all passing.
+- Android bundle exports cleanly.
+- **All four tabs now match their wireframes** in light mode, at 390x844 and
+  412x915.
+
+## Known issues
+
+Carried over: placeholder icons/splash, no `EAS_PROJECT_ID`, no Supabase schema
+or RLS, no auth handler. Plus:
+
+1. **Only the four tab roots are built.** The design has 46 screens; the
+   detail/flow screens (create-post 1-5, calendar, rankings, keyword, reviews,
+   review reply, GBP posts, website preview, employees, subscription) are not.
+   They are feature work.
+2. **Every action inside the tabs toasts "not built yet."** That is deliberate,
+   but it means the tabs are reviewable rather than usable.
+
+## Things future engineers must NOT change
+
+Everything from sessions 1-4, plus:
+
+- **Do not let the `*Parts.tsx` component files import fixtures or fetch.** They
+  take props. That is what keeps the swap to real data a one-file change per tab.
+- **Do not remove the fixture banner** from any tab, and do not let fixture
+  content drive the Connected accounts rows on Business.
+- **Do not replace a `| null` value prop with a plain `number`** in any of the
+  metric components.
+
+## Next recommended step
+
+The shell is now reviewable end to end. The highest-value next move is **Sunny
+wiring real auth and Supabase**, so Home and Business can move from fixtures to
+real `DataState` values — each tab is a single file change. Feature engineers
+can then build their detail screens behind the tab roots that already exist.
