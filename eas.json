@@ -12,7 +12,8 @@
         "gradleCommand": ":app:assembleDebug"
       },
       "env": {
-        "EXPO_PUBLIC_ENABLE_FIXTURES": "1"
+        "EXPO_PUBLIC_ENABLE_FIXTURES": "1",
+        "EXPO_PUBLIC_DEV_PREVIEW": "1"
       }
     },
     "preview": {
@@ -21,7 +22,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_ENABLE_FIXTURES": "0"
+        "EXPO_PUBLIC_ENABLE_FIXTURES": "0",
+        "EXPO_PUBLIC_DEV_PREVIEW": "0"
       }
     },
     "production": {
@@ -30,7 +32,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_ENABLE_FIXTURES": "0"
+        "EXPO_PUBLIC_ENABLE_FIXTURES": "0",
+        "EXPO_PUBLIC_DEV_PREVIEW": "0"
       }
     }
   },

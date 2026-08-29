@@ -4,7 +4,8 @@ import { View } from 'react-native';
 import { Screen } from '@/components/shared';
 import { Button, Card, Input, Text } from '@/components/ui';
 import { getSignInHandler, isSignInImplemented } from '@/features/auth/handlers';
-import { isSupabaseConfigured } from '@/lib/env';
+import { useSession } from '@/features/auth/SessionProvider';
+import { isDevPreviewEnabled, isSupabaseConfigured } from '@/lib/env';
 import { useTheme } from '@/theme';
 
 /**
@@ -34,6 +35,8 @@ export default function SignInScreen() {
   const theme = useTheme();
   const configured = isSupabaseConfigured();
   const implemented = isSignInImplemented();
+  const previewAvailable = isDevPreviewEnabled();
+  const { enterPreview } = useSession();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -154,6 +157,25 @@ export default function SignInScreen() {
             style={{ marginTop: theme.spacing.lg }}>
             Authentication is not implemented in the foundation build.
           </Text>
+        ) : null}
+
+        {/*
+          Development escape hatch so the shell can be walked before auth
+          exists. It signs nobody in - it only relaxes the route guard, and
+          every screen then carries an undismissable "Preview mode" banner.
+          Hidden entirely unless isDevPreviewEnabled(), which is impossible in a
+          release build.
+        */}
+        {previewAvailable ? (
+          <Button
+            label="Preview the app without signing in"
+            variant="secondary"
+            size="medium"
+            onPress={enterPreview}
+            accessibilityHint="Development only. Opens the app shell without an account."
+            style={{ marginTop: theme.spacing.lg }}
+            testID="button-dev-preview"
+          />
         ) : null}
       </View>
     </Screen>

@@ -23,6 +23,12 @@ jest.mock('@/lib/env', () => {
   return { ...actual, isSupabaseConfigured: () => mockSupabaseConfigured };
 });
 
+jest.mock('@/lib/supabase/client', () => ({
+  getSupabase: () => null,
+  resetSupabaseClient: () => {},
+  isSupabaseConfigured: () => false,
+}));
+
 /**
  * Screen smoke tests.
  *
@@ -38,7 +44,11 @@ function renderScreen(name: string, Component: () => React.JSX.Element) {
     {
       [name]: () => (
         <ThemeProvider forceScheme="light">
-          <Component />
+          <SessionProvider>
+            <ToastProvider>
+              <Component />
+            </ToastProvider>
+          </SessionProvider>
         </ThemeProvider>
       ),
     },
@@ -98,20 +108,7 @@ describe('Business', () => {
 
 describe('Settings', () => {
   it('renders and names the missing environment variables', async () => {
-    await renderRouter(
-      {
-        settings: () => (
-          <ThemeProvider forceScheme="light">
-            <SessionProvider>
-              <ToastProvider>
-                <SettingsScreen />
-              </ToastProvider>
-            </SessionProvider>
-          </ThemeProvider>
-        ),
-      },
-      { initialUrl: '/settings' },
-    );
+    await renderScreen('settings', SettingsScreen);
 
     expect(screen.getByTestId('screen-settings')).toBeOnTheScreen();
     expect(screen.getByText('Not configured')).toBeOnTheScreen();

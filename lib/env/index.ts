@@ -26,6 +26,7 @@ const PUBLIC_ENV: Record<string, string | undefined> = {
   EXPO_PUBLIC_LINKEDIN_CLIENT_ID: process.env.EXPO_PUBLIC_LINKEDIN_CLIENT_ID,
   EXPO_PUBLIC_RAZORPAY_KEY_ID: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID,
   EXPO_PUBLIC_ENABLE_FIXTURES: process.env.EXPO_PUBLIC_ENABLE_FIXTURES,
+  EXPO_PUBLIC_DEV_PREVIEW: process.env.EXPO_PUBLIC_DEV_PREVIEW,
 };
 
 export const env = {
@@ -49,6 +50,23 @@ export function isSupabaseConfigured(): boolean {
 export function isFixtureModeEnabled(): boolean {
   if (!__DEV__) return false;
   return readPublic('EXPO_PUBLIC_ENABLE_FIXTURES') === '1';
+}
+
+/**
+ * Development preview mode.
+ *
+ * Lets an engineer walk the app shell before authentication exists, WITHOUT
+ * signing anyone in. It does not create a session, fetch anything, or imply an
+ * account: it only relaxes the route guard so the four tabs are reachable, and
+ * every screen carries an undismissable "Preview mode" banner while it is on.
+ *
+ * Gated identically to fixture mode: requires a development build AND an
+ * explicit opt-in flag. The preview and production EAS profiles both set the
+ * flag to "0", so a release binary can never bypass its own auth guard.
+ */
+export function isDevPreviewEnabled(): boolean {
+  if (!__DEV__) return false;
+  return readPublic('EXPO_PUBLIC_DEV_PREVIEW') === '1';
 }
 
 /** Names only — used by Settings > Diagnostics to show what is missing. */

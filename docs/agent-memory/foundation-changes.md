@@ -283,3 +283,93 @@ Everything from session 1, plus:
 the session subscription and the redirect are already wired — registering the
 handler is the only step needed to make sign-in work end to end. Then run
 `supabase init` / `link` and design the RLS policies.
+
+---
+
+## Date
+
+2026-08-30 (session 3 — development preview mode)
+
+## What I changed
+
+The app was unreachable past sign-in, correctly: `(tabs)/_layout.tsx` requires a
+confirmed session and no auth handler is registered. That blocks anyone from
+seeing the shell before Sunny's auth work lands.
+
+Added **development preview mode** — an explicit bypass of the route guard, not
+a fake session.
+
+- `isDevPreviewEnabled()` in `lib/env`: requires `__DEV__` **and**
+  `EXPO_PUBLIC_DEV_PREVIEW=1`. Gated identically to fixture mode.
+- `SessionProvider` gained `isPreview` / `enterPreview` / `exitPreview`.
+  Preview is reported separately from `isAuthenticated` and a real session
+  always takes precedence, so preview never masquerades as a session.
+- `DevPreviewBanner`: undismissable, pinned above every tab, states plainly
+  "not signed in, nothing here is real data".
+- Sign-in shows "Preview the app without signing in", hidden entirely unless
+  the flag is on.
+- `eas.json` sets the flag to `0` in both `preview` and `production`.
+
+## Files changed
+
+```
+lib/env/index.ts                      (isDevPreviewEnabled)
+features/auth/SessionProvider.tsx     (preview state, kept separate from session)
+components/shared/DevPreviewBanner.tsx (new)
+components/shared/index.ts
+app/(tabs)/_layout.tsx                (banner + inset handling)
+app/(auth)/sign-in.tsx                (preview entry point)
+eas.json  .env.local.example
+__tests__/dev-preview.test.tsx        (new, 5 tests)
+__tests__/screens.test.tsx            (SessionProvider in the shared harness)
+```
+
+## Decisions made
+
+1. **Preview relaxes the guard; it does not create a session.** No user object
+   is fabricated, nothing is fetched, and no screen gains data. Every tab still
+   shows its honest empty state.
+2. **`isPreview` is separate from `isAuthenticated`.** Collapsing them would let
+   UI treat preview as a signed-in owner.
+3. **The banner is undismissable and always visible.** Same reasoning as
+   `FixtureBanner`: a bypass that can be hidden will eventually be mistaken for
+   the real thing in a screenshot or demo.
+4. **The tabs layout overrides the top safe-area inset for its subtree.** The
+   banner consumes `insets.top`; without the override every Screen would apply
+   it again and each tab would open with a band of dead space.
+5. **Double-gated, and off in every non-development profile.** A test asserts
+   `isDevPreviewEnabled()` is false whenever `__DEV__` is false, so no env file
+   can enable it in a release build.
+
+## Current state
+
+- typecheck, lint pass. 80 tests, 5 suites, all passing.
+- Android bundle exports cleanly.
+- With `EXPO_PUBLIC_DEV_PREVIEW=1` in `.env.local`, sign-in offers the preview
+  button and all four tabs are walkable behind a persistent banner.
+
+## Known issues
+
+Carried over: placeholder icons/splash, no `EAS_PROJECT_ID`, no Supabase schema
+or RLS, `(auth)` has only the sign-in screen. Plus:
+
+1. **Preview mode is not a substitute for auth.** It exists so the shell can be
+   reviewed. Nothing user-specific can be built or tested against it.
+
+## Things future engineers must NOT change
+
+Everything from sessions 1 and 2, plus:
+
+- **Do not widen `isDevPreviewEnabled()`.** It must keep requiring `__DEV__`
+  plus the explicit flag. A regression test pins this.
+- **Do not merge `isPreview` into `isAuthenticated`**, and do not make the
+  preview banner dismissable or conditional.
+- **Do not set `EXPO_PUBLIC_DEV_PREVIEW=1`** in the `preview` or `production`
+  EAS profiles.
+- **Do not build features against preview mode.** It provides no data.
+
+## Next recommended step
+
+Unchanged: **Sunny** registers a real `signInWithEmail` handler via
+`registerSignInHandler(...)`. Once that exists, preview mode becomes a
+convenience rather than the only way in, and can eventually be retired.

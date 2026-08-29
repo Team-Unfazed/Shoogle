@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { isDevPreviewEnabled, isSupabaseConfigured } from '@/lib/env';
 import { getSupabase } from '@/lib/supabase/client';
 import {
   failed,
@@ -37,8 +37,21 @@ import type { SessionUser } from '@/lib/providers/contracts';
 export interface SessionContextValue {
   /** Null value means "definitely signed out". Non-ready means we do not know. */
   state: DataState<SessionUser | null>;
-  /** True only when we have a confirmed, signed-in user. */
+  /**
+   * True when the app shell should be reachable. This is a REAL signed-in user,
+   * or development preview mode. Check `isPreview` before showing anything
+   * user-specific — in preview there is no account behind this.
+   */
   isAuthenticated: boolean;
+  /**
+   * True when the shell is only reachable because of the development preview
+   * bypass. There is NO session, NO user and NO data. Always false in a release
+   * build. UI must state this plainly wherever it matters.
+   */
+  isPreview: boolean;
+  /** Development only. No-op unless isDevPreviewEnabled(). */
+  enterPreview: () => void;
+  exitPreview: () => void;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -50,6 +63,7 @@ const NOT_CONFIGURED_MESSAGE =
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<DataState<SessionUser | null>>(loading());
+  const [preview, setPreview] = useState(false);
 
   const readSession = useCallback(async () => {
     const supabase = getSupabase();
@@ -82,21 +96,38 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return () => data.subscription.unsubscribe();
   }, [readSession]);
 
+  const enterPreview = useCallback(() => {
+    // Guarded here as well as at the call site, so preview can never be entered
+    // in a release build even if a screen forgets to check.
+    if (isDevPreviewEnabled()) setPreview(true);
+  }, []);
+
+  const exitPreview = useCallback(() => setPreview(false), []);
+
   const signOut = useCallback(async () => {
+    setPreview(false);
     const supabase = getSupabase();
     if (!supabase) return;
     await supabase.auth.signOut();
     setState(ready(null, new Date().toISOString()));
   }, []);
 
+  const hasRealSession = state.status === 'ready' && state.value !== null;
+  // Preview never masquerades as a session: it is reported separately, and a
+  // real session always takes precedence over it.
+  const inPreview = preview && !hasRealSession && isDevPreviewEnabled();
+
   const value = useMemo<SessionContextValue>(
     () => ({
       state,
-      isAuthenticated: state.status === 'ready' && state.value !== null,
+      isAuthenticated: hasRealSession || inPreview,
+      isPreview: inPreview,
+      enterPreview,
+      exitPreview,
       signOut,
       refresh: readSession,
     }),
-    [state, signOut, readSession],
+    [state, hasRealSession, inPreview, enterPreview, exitPreview, signOut, readSession],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -7,6 +7,7 @@
  * team rather than editing in place: five features depend on this behaviour.
  */
 export { DataStateView } from './DataStateView';
+export { DevPreviewBanner } from './DevPreviewBanner';
 export { ErrorBoundary } from './ErrorBoundary';
 export { FixtureBanner } from './FixtureBanner';
 export { FullScreenLoader, LoadingBoundary } from './LoadingBoundary';

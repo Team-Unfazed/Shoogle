@@ -1,7 +1,9 @@
 import { Redirect, Tabs, useRouter, useSegments } from 'expo-router';
 import { useCallback } from 'react';
+import { View } from 'react-native';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FullScreenLoader } from '@/components/shared';
+import { DevPreviewBanner, FullScreenLoader } from '@/components/shared';
 import { Navigation, PRIMARY_NAVIGATION } from '@/components/ui';
 import { useSession } from '@/features/auth/SessionProvider';
 
@@ -20,7 +22,8 @@ import { useSession } from '@/features/auth/SessionProvider';
  * without a navigator.
  */
 export default function TabsLayout() {
-  const { state, isAuthenticated } = useSession();
+  const { state, isAuthenticated, isPreview, exitPreview } = useSession();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const segments = useSegments();
 
@@ -28,7 +31,8 @@ export default function TabsLayout() {
     return <FullScreenLoader label="Loading your business" />;
   }
 
-  // Guard: never render the authenticated shell without a confirmed session.
+  // Guard: never render the shell without a confirmed session, or an explicit
+  // development preview. `isPreview` is impossible in a release build.
   if (!isAuthenticated) {
     return <Redirect href="/(auth)/sign-in" />;
   }
@@ -37,13 +41,15 @@ export default function TabsLayout() {
   const last = segments[segments.length - 1];
   const activeKey = last && last !== '(tabs)' ? last : 'index';
 
-  return (
+  const tabs = (
     <Tabs
       screenOptions={{ headerShown: false, animation: 'shift' }}
       tabBar={() => (
         <TabBar
           activeKey={activeKey}
-          onSelect={(key) => router.navigate(key === 'index' ? '/(tabs)' : (`/(tabs)/${key}` as never))}
+          onSelect={(key) =>
+            router.navigate(key === 'index' ? '/(tabs)' : (`/(tabs)/${key}` as never))
+          }
         />
       )}>
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
@@ -51,6 +57,29 @@ export default function TabsLayout() {
       <Tabs.Screen name="business" options={{ title: 'Business' }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
     </Tabs>
+  );
+
+  if (!isPreview) return tabs;
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/*
+        The preview banner is pinned above every tab and cannot be dismissed.
+        It sits below the status bar, so it consumes the top safe-area inset.
+      */}
+      <View style={{ paddingTop: insets.top }}>
+        <DevPreviewBanner onExit={exitPreview} />
+      </View>
+
+      {/*
+        The banner has already consumed the top inset, so the subtree below is
+        told the top inset is zero. Without this, every Screen would apply it
+        again and each tab would open with a band of dead space under the banner.
+      */}
+      <SafeAreaInsetsContext.Provider value={{ ...insets, top: 0 }}>
+        {tabs}
+      </SafeAreaInsetsContext.Provider>
+    </View>
   );
 }
 
