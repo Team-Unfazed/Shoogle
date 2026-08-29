@@ -1,56 +1,119 @@
-# Welcome to your Expo app 👋
+# Shoogle
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+An AI marketing operator for Indian local businesses — salons, gyms, clinics,
+restaurants, bakeries, boutiques and repair shops.
 
-## Get started
+Native **Android-first** React Native app, built with Expo. Runs in Expo Go for
+development and ships to Google Play as an Android App Bundle via EAS.
 
-1. Install dependencies
+> **Status: frontend foundation.** The app shell, design system, routing,
+> provider contracts and testing setup are in place. **No integration is
+> implemented** — not Google Business Profile, Meta, LinkedIn, billing, AI
+> generation, website generation, publishing or scheduling. The UI reports this
+> honestly rather than simulating it.
 
-   ```bash
-   npm install
-   ```
+---
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Getting started
 
 ```bash
-npm run reset-project
+npm install
+cp .env.local.example .env.local     # then fill in the values you have
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Scan the QR code with **Expo Go** on an Android device, or press `a` for a
+connected emulator. The app runs without `.env.local` — Settings › Diagnostics
+will name which variables are missing.
 
-### Other setup steps
+### Commands
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+| Command | What it does |
+|---|---|
+| `npx expo start` | Dev server + QR code for Expo Go |
+| `npm run android` | Launch on a connected device or emulator |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | `expo lint` |
+| `npm test` | Jest + React Native Testing Library |
+| `npm run build:android:preview` | Internal-distribution APK via EAS |
+| `npm run build:android:production` | Play Store AAB via EAS |
 
-## Learn more
+---
 
-To learn more about developing your project with Expo, look at the following resources:
+## Requirements
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- Node 20+
+- **Expo Go** on an Android device, or an Android emulator (API 24+)
+- An [Expo account](https://expo.dev) for EAS builds
 
-## Join the community
+Everything the foundation uses is available inside Expo Go, so **no custom
+development build is required yet**. That changes the first time a feature needs
+a native module Expo Go does not bundle — Google Sign-In and in-app purchases
+are the likely triggers. See `docs/android-release.md`.
 
-Join our community of developers creating universal apps.
+---
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Project layout
+
+```
+app/                 Expo Router routes (four tabs: Home, Posts, Business, Settings)
+components/ui/       Design-system primitives
+components/shared/   App shell — Screen, TopBar, error/loading boundaries
+theme/               Design tokens (single source of truth)
+lib/                 Env, provider contracts + registry, DataState, Supabase
+features/            One folder per engineer, isolated
+fixtures/            Development-only data, gated and clearly labelled
+docs/                Agent memory and API research
+```
+
+Read `CLAUDE.md` before contributing — it carries the product rules the code
+enforces and the boundary rules that keep five engineers out of each other's way.
+
+---
+
+## Design
+
+The visual source of truth is the Claude Design project **"Shoogle Mobile App"**.
+Colours, type scale, control geometry, radii and badge states in `theme/tokens.ts`
+are transcribed from its design-system reference, and `__tests__/foundation.test.tsx`
+pins those values so a drift is a test failure.
+
+Two families are bundled: **Sora** (display, screen titles) and **Manrope** (all
+UI text).
+
+---
+
+## Honest data
+
+The single rule that shapes most of this codebase: **unknown is not zero.**
+
+Anything crossing the network is a `DataState<T>` —
+`loading | ready | unavailable | error` — and screens render it through
+`<DataStateView>`, which turns each case into the right UI. `Metric` and `Score`
+accept `number | null` so an unmeasured value cannot be typed as `0` by accident.
+
+A metric we have not fetched, cannot fetch, or that a provider does not expose
+renders as `—` with a stated reason. It never renders as `0`, an empty chart, or
+a flat trend line.
+
+---
+
+## Secrets
+
+Copy `.env.local.example` to `.env.local`. It is git-ignored.
+
+**Anything prefixed `EXPO_PUBLIC_` is compiled into the APK and is readable by
+anyone who downloads the app.** Only publishable identifiers belong there — the
+Supabase anon key (protected by RLS), OAuth *client ids*, the Razorpay *key id*.
+Service role keys, OAuth client secrets and the Gemini key are server-side only
+and are deliberately unreachable from `lib/env`.
+
+Never commit real values.
+
+---
+
+## Play Store
+
+Not published. Release configuration lives in `eas.json` and `app.config.ts`
+(package `com.shoogle.app`, `targetSdkVersion` 36). See `docs/android-release.md`
+for the steps that still need doing.
