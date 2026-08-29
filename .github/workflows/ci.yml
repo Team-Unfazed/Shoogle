@@ -1,0 +1,108 @@
+name: CI
+
+# The foundation's guarantees — "unknown is not zero", no fabricated data,
+# fixtures unreachable in a release build — are enforced by the test suite, not
+# by convention. With five engineers pushing in parallel, an unchecked red merge
+# quietly retires those guarantees. This workflow is what keeps them true.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A new push to the same branch cancels the previous run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, lint, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test:ci
+
+  bundle:
+    name: Android bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Typecheck cannot catch a broken Metro config, a bad asset path, or a
+      # module that resolves in Jest but not in the app. Only a real bundle can.
+      - name: Export Android bundle
+        run: npx expo export --platform android --output-dir .ci-export
+        env:
+          # Never build CI with fixture or preview mode on. A release binary must
+          # not be able to render invented data or bypass its own auth guard.
+          EXPO_PUBLIC_ENABLE_FIXTURES: '0'
+          EXPO_PUBLIC_DEV_PREVIEW: '0'
+
+  secrets:
+    name: No committed secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: a secret removed from HEAD is still a leaked secret.
+          fetch-depth: 0
+
+      - name: Reject committed .env files
+        run: |
+          if git ls-files --error-unmatch .env .env.local .env.production 2>/dev/null; then
+            echo "::error::A .env file is tracked. Only .env.local.example may be committed."
+            exit 1
+          fi
+          echo "No .env files tracked."
+
+      - name: Reject credential-shaped values
+        run: |
+          # Patterns for real credentials. .env.local.example is excluded because
+          # it holds variable NAMES with empty values by design.
+          PATTERNS='sb_publishable_[A-Za-z0-9_-]{10,}|sb_secret_[A-Za-z0-9_-]{10,}|AIza[0-9A-Za-z_-]{30,}|sk-[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+          if git grep -I -nE "$PATTERNS" -- ':!.env.local.example' ':!package-lock.json'; then
+            echo "::error::A credential-shaped value is committed. Remove it and rotate the key."
+            exit 1
+          fi
+          echo "No credential-shaped values found."
+
+      - name: Reject service-role key reaching the app
+        run: |
+          # The service role key must never be importable from client code.
+          if git grep -I -n "SUPABASE_SERVICE_ROLE_KEY" -- app components features lib theme; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY referenced in client code. It must stay server-side."
+            exit 1
+          fi
+          echo "Service role key is not referenced in client code."

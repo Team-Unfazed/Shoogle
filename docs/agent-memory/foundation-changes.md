@@ -582,3 +582,81 @@ The shell is now reviewable end to end. The highest-value next move is **Sunny
 wiring real auth and Supabase**, so Home and Business can move from fixtures to
 real `DataState` values — each tab is a single file change. Feature engineers
 can then build their detail screens behind the tab roots that already exist.
+
+---
+
+## Date
+
+2026-08-30 (session 6 — repo published, CI and contribution rules)
+
+## What I changed
+
+Pushed the project to https://github.com/Team-Unfazed/Shoogle (`main`) and added
+the scaffolding five engineers need to work in parallel without diverging.
+
+- **`.github/workflows/ci.yml`** — three jobs on every PR and push to `main`:
+  `verify` (typecheck, lint, tests), `bundle` (a real Android export, which is
+  the only thing that catches a broken Metro config or an unresolvable module),
+  and `secrets` (rejects tracked `.env` files, credential-shaped values across
+  full history, and any reference to the service-role key from client code).
+- **`CONTRIBUTING.md`** — ownership table, per-file owners for the four tab
+  roots, route namespacing, shared-code review owners, the non-negotiable
+  honesty rules, and a PR checklist.
+
+## Files changed
+
+```
+.github/workflows/ci.yml   (new)
+CONTRIBUTING.md            (new)
+```
+
+## Decisions made
+
+1. **CI forces `EXPO_PUBLIC_ENABLE_FIXTURES=0` and `EXPO_PUBLIC_DEV_PREVIEW=0`
+   on the bundle job.** CI must never build with fixture data reachable or the
+   auth guard bypassable.
+2. **The secret scan runs over full history** (`fetch-depth: 0`). A secret
+   removed from HEAD is still a leaked secret.
+3. **The `sk-` pattern requires 20+ alphanumerics.** A looser pattern matched
+   `flask-outline`, an icon name — a false positive there would have blocked
+   every PR.
+4. **Shared code has named review owners rather than a "raise it with the team"
+   convention**: `components/`, `theme/` → Aryan; `lib/` → Sunny. With five
+   people, an unowned shared folder gets edited concurrently within a week.
+5. **Routes are namespaced per engineer** (`app/social/`, `app/seo/`,
+   `app/website/`, `app/account/`). Expo Router auto-registers files, so this
+   costs nothing and removes filename collisions.
+
+## Current state
+
+- Published at `Team-Unfazed/Shoogle`, `main`, 118 files.
+- No credentials in any commit — verified across full history before pushing.
+  `.env.local` never entered history; `.env.local.example` holds names only.
+- Every CI step verified locally before being made a gate: typecheck, lint,
+  87 tests, Android bundle, and all three secret-scan steps.
+
+## Known issues
+
+Carried over: placeholder icons/splash, no `EAS_PROJECT_ID`, no Supabase schema
+or RLS, no auth handler, only the four tab roots built. Plus:
+
+1. **`main` is not branch-protected yet.** CI runs, but nothing stops a direct
+   push. This must be enabled in GitHub Settings — it cannot be done from the
+   repo.
+2. **The default branch may still be `master` in GitHub's settings.** The branch
+   was renamed to `main` locally before the first push.
+
+## Things future engineers must NOT change
+
+Everything from sessions 1-5, plus:
+
+- **Do not weaken the CI secret scan**, and do not remove `fetch-depth: 0`.
+- **Do not enable fixtures or preview mode in the CI bundle job.**
+- **Do not push directly to `main`** once branch protection is on.
+
+## Next recommended step
+
+1. **Enable branch protection on `main`** in GitHub Settings: require the three
+   CI checks, and disallow direct pushes. Confirm the default branch is `main`.
+2. Then all five engineers can start in parallel — each against their own
+   provider contract and fixtures, per CONTRIBUTING.md.
