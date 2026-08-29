@@ -1,9 +1,20 @@
 /**
  * features/auth - public surface. Owner: Sunny.
  *
- * Other features import from '@/features/auth' and nothing deeper. Export only
- * what another feature genuinely needs; keep the rest private to this folder.
+ * Other features import from '@/features/auth' and nothing deeper.
  *
- * Nothing is implemented yet - see README.md for the boundary rules.
+ * The foundation ships two seams here, both consumed by the app shell:
+ *   - SessionProvider / useSession  - who is signed in
+ *   - registerSignInHandler         - how sign-in actually happens
+ *
+ * Neither implements authentication. See README.md for the boundary rules.
  */
-export {};
+export { SessionProvider, useSession } from './SessionProvider';
+export {
+  registerSignInHandler,
+  isSignInImplemented,
+  getSignInHandler,
+  clearSignInHandler,
+} from './handlers';
+export type { SignInHandler } from './handlers';
+export type { SessionContextValue } from './SessionProvider';

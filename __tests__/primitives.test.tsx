@@ -52,14 +52,14 @@ describe('Button', () => {
   it('renders its label and fires onPress', async () => {
     const onPress = jest.fn();
     await wrap(<Button label="Schedule post" onPress={onPress} />);
-    fireEvent.press(screen.getByRole('button', { name: 'Schedule post' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Schedule post' }));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
   it('does not fire while loading, and reports busy to assistive tech', async () => {
     const onPress = jest.fn();
     await wrap(<Button label="Save" onPress={onPress} loading testID="btn" />);
-    fireEvent.press(screen.getByTestId('btn'));
+    await fireEvent.press(screen.getByTestId('btn'));
     expect(onPress).not.toHaveBeenCalled();
     expect(screen.getByTestId('btn')).toBeBusy();
     expect(screen.getByTestId('btn')).toBeDisabled();
@@ -68,7 +68,7 @@ describe('Button', () => {
   it('does not fire when disabled', async () => {
     const onPress = jest.fn();
     await wrap(<Button label="Save" onPress={onPress} disabled testID="btn" />);
-    fireEvent.press(screen.getByTestId('btn'));
+    await fireEvent.press(screen.getByTestId('btn'));
     expect(onPress).not.toHaveBeenCalled();
   });
 
@@ -89,7 +89,7 @@ describe('IconButton', () => {
   it('exposes the required accessible label', async () => {
     const onPress = jest.fn();
     await wrap(<IconButton name="close" accessibilityLabel="Close" onPress={onPress} />);
-    fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
     expect(onPress).toHaveBeenCalled();
   });
 });
@@ -242,7 +242,7 @@ describe('Tabs', () => {
       />,
     );
     expect(screen.getByRole('tab', { name: 'Scheduled' })).toBeSelected();
-    fireEvent.press(screen.getByRole('tab', { name: 'Published' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Published' }));
     expect(onChange).toHaveBeenCalledWith('b');
   });
 });
@@ -261,7 +261,7 @@ describe('Navigation', () => {
     const onSelect = jest.fn();
     await wrap(<Navigation items={PRIMARY_NAVIGATION} activeKey="posts" onSelect={onSelect} />);
     expect(screen.getByTestId('nav-posts')).toBeSelected();
-    fireEvent.press(screen.getByTestId('nav-business'));
+    await fireEvent.press(screen.getByTestId('nav-business'));
     expect(onSelect).toHaveBeenCalledWith('business');
   });
 
@@ -289,7 +289,7 @@ describe('EmptyState and ErrorState', () => {
   it('ErrorState offers retry when a handler is supplied', async () => {
     const onRetry = jest.fn();
     await wrap(<ErrorState message="Could not load." onRetry={onRetry} />);
-    fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
     expect(onRetry).toHaveBeenCalled();
   });
 
@@ -308,7 +308,7 @@ describe('Card, Skeleton and Avatar helpers', () => {
         <Badge label="x" />
       </Card>,
     );
-    fireEvent.press(screen.getByRole('button', { name: 'Open SEO' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Open SEO' }));
     expect(onPress).toHaveBeenCalled();
   });
 

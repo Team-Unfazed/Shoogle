@@ -186,3 +186,100 @@ honest empty states. Nothing is faked.
 3. **Design** — replace the placeholder icon and splash assets.
 4. **Aryan** — Home is the surface most likely to invite invented numbers.
    Build it against `DataStateView` from the start.
+
+---
+
+## Date
+
+2026-08-30 (session 2 — post first device run)
+
+## What I changed
+
+Fixed a genuine honesty defect found once the app was running on a real device,
+and wired local Supabase configuration.
+
+1. **Sign-in button could become enabled but inert.** The button's enabled state
+   was gated on `isSupabaseConfigured()` alone. The moment valid Supabase
+   credentials were added, the label flipped to "Sign in", the button enabled
+   once both fields had text, and pressing it did nothing — a silently inert
+   control, which is exactly the pretend behaviour the brief forbids. It was
+   only honest by accident, because the backend happened to be missing.
+
+   Added `features/auth/handlers.ts`: a sign-in seam mirroring the provider
+   registry. The screen now requires **both** facts — backend configured *and*
+   a handler registered — and delegates the actual call to whatever the auth
+   feature registers. It also renders handler failures inline and deliberately
+   does not navigate on success (SessionProvider's auth-state subscription and
+   the `(auth)` layout redirect do that, driven by a real session).
+
+2. **Two latent test bugs.** RNTL 14 flushes React state updates asynchronously,
+   so an unawaited `fireEvent` leaves the tree stale. The new "stays disabled"
+   test would have passed for the wrong reason (empty fields rather than a
+   missing handler). Every `fireEvent` call in the suite is now awaited.
+
+3. **Local Supabase config.** Wrote `.env.local` (git-ignored) with the project
+   URL and publishable key. Verified Expo loads and inlines both into the
+   Android dev bundle.
+
+## Files changed
+
+```
+features/auth/handlers.ts        (new — sign-in seam)
+features/auth/index.ts           (exports the seam)
+app/(auth)/sign-in.tsx           (gates on configured AND implemented)
+__tests__/screens.test.tsx       (3 new sign-in tests, awaited fireEvent)
+__tests__/primitives.test.tsx    (awaited fireEvent)
+.env.local                       (NOT COMMITTED — git-ignored)
+```
+
+## Decisions made
+
+1. **"Configured" and "implemented" are separate facts and both gate the
+   button.** Conflating them is what produced the inert-button defect.
+2. **The sign-in screen calls a registered handler rather than implementing
+   auth.** Keeps the foundation/feature boundary intact while making the screen
+   genuinely functional the moment Sunny registers a handler — no edit needed to
+   the screen.
+3. **No navigation on sign-in success.** Redirect follows the observed session,
+   never an optimistic assumption that the call worked.
+
+## Current state
+
+- `npm run typecheck` — passes
+- `npm run lint` — passes
+- `npm test` — passes (75 tests, 4 suites)
+- **Confirmed running on a physical Android device via Expo Go.** This closes
+  the hardware-verification gap noted in session 1.
+- Supabase is configured locally; the "Backend not configured" card no longer
+  appears. The button still correctly reads "Sign in unavailable" because no
+  sign-in handler is registered yet.
+
+## Known issues
+
+Carried over from session 1: placeholder icons/splash, no `EAS_PROJECT_ID`,
+`(auth)` has only the sign-in screen, npm audit advisories in the Expo
+toolchain. Plus:
+
+1. **No Supabase schema, RLS policies or migrations exist.** The project is
+   linked in name only. `supabase init` / `link` and the DB work are Sunny's
+   track and were deliberately not run here — they are backend feature work,
+   not foundation.
+
+## Things future engineers must NOT change
+
+Everything from session 1, plus:
+
+- **The two-fact gate on the sign-in button.** Do not re-gate it on
+  `isSupabaseConfigured()` alone; that reintroduces the inert-button defect.
+  There is a regression test pinning this.
+- **The no-navigation-on-success rule** in `sign-in.tsx`.
+- **Awaiting `fireEvent`** in tests. Dropping the await can make an assertion
+  pass for the wrong reason.
+
+## Next recommended step
+
+**Sunny:** implement `signInWithEmail` against Supabase and call
+`registerSignInHandler(...)` from the auth feature's entry point. The screen,
+the session subscription and the redirect are already wired — registering the
+handler is the only step needed to make sign-in work end to end. Then run
+`supabase init` / `link` and design the RLS policies.

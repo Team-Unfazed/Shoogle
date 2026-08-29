@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 
 import BusinessScreen from '@/app/(tabs)/business';
@@ -8,7 +8,20 @@ import SettingsScreen from '@/app/(tabs)/settings';
 import SignInScreen from '@/app/(auth)/sign-in';
 import { ToastProvider } from '@/components/ui';
 import { SessionProvider } from '@/features/auth/SessionProvider';
+import { clearSignInHandler, registerSignInHandler } from '@/features/auth/handlers';
+import { failed, ready } from '@/lib/state/DataState';
 import { ThemeProvider } from '@/theme';
+
+/**
+ * Supabase configuration is read from inlined EXPO_PUBLIC_* values, which are
+ * absent in tests. Two sign-in tests need the "configured" path, so the flag is
+ * made controllable here. It defaults to false, matching a fresh clone.
+ */
+let mockSupabaseConfigured = false;
+jest.mock('@/lib/env', () => {
+  const actual = jest.requireActual('@/lib/env');
+  return { ...actual, isSupabaseConfigured: () => mockSupabaseConfigured };
+});
 
 /**
  * Screen smoke tests.
@@ -109,6 +122,11 @@ describe('Settings', () => {
 });
 
 describe('Sign in', () => {
+  afterEach(() => {
+    clearSignInHandler();
+    mockSupabaseConfigured = false;
+  });
+
   it('renders and says plainly that the backend is not configured', async () => {
     await renderScreen('sign-in', SignInScreen);
     expect(screen.getByTestId('screen-sign-in')).toBeOnTheScreen();
@@ -122,5 +140,58 @@ describe('Sign in', () => {
     expect(
       screen.getByText('Authentication is not implemented in the foundation build.'),
     ).toBeOnTheScreen();
+  });
+
+  /**
+   * Regression guard.
+   *
+   * The button used to enable as soon as Supabase was configured, even though
+   * no sign-in existed - so adding env vars produced a live-looking button that
+   * silently did nothing. "Configured" and "implemented" are separate facts and
+   * the button must require BOTH.
+   */
+  it('stays disabled while no sign-in handler is registered, even with fields filled', async () => {
+    await renderScreen('sign-in', SignInScreen);
+    await fireEvent.changeText(screen.getByTestId('input-email'), 'owner@example.com');
+    await fireEvent.changeText(screen.getByTestId('input-password'), 'hunter2');
+
+    expect(screen.getByTestId('button-sign-in')).toBeDisabled();
+    // And it never claims to be a working control.
+    expect(screen.getByText('Sign in unavailable')).toBeOnTheScreen();
+    expect(screen.queryByText('Sign in')).toBeNull();
+  });
+
+  it('surfaces a handler failure instead of silently doing nothing', async () => {
+    mockSupabaseConfigured = true;
+    registerSignInHandler({
+      signInWithEmail: async () =>
+        failed('AUTH_BAD_CREDENTIALS', 'That email and password do not match.', true),
+    });
+
+    await renderScreen('sign-in', SignInScreen);
+    await fireEvent.changeText(screen.getByTestId('input-email'), 'owner@example.com');
+    await fireEvent.changeText(screen.getByTestId('input-password'), 'wrong');
+    await fireEvent.press(screen.getByTestId('button-sign-in'));
+
+    expect(await screen.findByTestId('sign-in-error')).toBeOnTheScreen();
+    expect(screen.getByText('That email and password do not match.')).toBeOnTheScreen();
+  });
+
+  it('does not announce success itself - the session decides', async () => {
+    mockSupabaseConfigured = true;
+    registerSignInHandler({
+      signInWithEmail: async () =>
+        ready({ id: 'u1', email: 'owner@example.com', phone: null, displayName: null }, 'ts'),
+    });
+
+    await renderScreen('sign-in', SignInScreen);
+    await fireEvent.changeText(screen.getByTestId('input-email'), 'owner@example.com');
+    await fireEvent.changeText(screen.getByTestId('input-password'), 'correct');
+    await fireEvent.press(screen.getByTestId('button-sign-in'));
+
+    // No "Signed in" claim is rendered here. Redirecting is SessionProvider's
+    // job, driven by a real session rather than an optimistic assumption.
+    await waitFor(() => expect(screen.queryByTestId('sign-in-error')).toBeNull());
+    expect(screen.queryByText(/signed in/i)).toBeNull();
   });
 });

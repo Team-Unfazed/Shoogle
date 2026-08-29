@@ -3,19 +3,29 @@ import { View } from 'react-native';
 
 import { Screen } from '@/components/shared';
 import { Button, Card, Input, Text } from '@/components/ui';
+import { getSignInHandler, isSignInImplemented } from '@/features/auth/handlers';
 import { isSupabaseConfigured } from '@/lib/env';
 import { useTheme } from '@/theme';
 
 /**
  * SIGN-IN SHELL. Feature owner: Sunny.
  *
- * This is the LAYOUT ONLY. There is no authentication logic here on purpose:
- * `onSubmit` is a seam for the auth feature to fill in. The button is disabled
- * and labelled honestly so the screen never pretends to sign anyone in.
+ * This screen owns the LAYOUT and the honest reporting of what is and is not
+ * available. It does NOT implement authentication: it delegates to whatever
+ * handler the auth feature registers via `registerSignInHandler`.
  *
- * When Supabase is unconfigured the screen says exactly that, naming the file
- * to create - because on a fresh clone that is the actual problem, and a
- * generic "sign-in failed" would send an engineer hunting in the wrong place.
+ * Two separate facts are reported separately, because conflating them would
+ * produce a button that looks live and silently does nothing:
+ *
+ *   1. Is the backend configured?  -> isSupabaseConfigured()
+ *   2. Is sign-in actually built?  -> isSignInImplemented()
+ *
+ * The button only enables when BOTH are true and the fields are filled.
+ *
+ * On success there is no navigation call here. SessionProvider is subscribed to
+ * auth-state changes, and `(auth)/_layout.tsx` redirects out of this group once
+ * a session exists - so the redirect follows the real session, not an
+ * optimistic assumption that the call worked.
  *
  * ONBOARDING: product rule 11 says no unnecessary onboarding. Do not add a
  * carousel, a tour, or a "welcome" step before this screen.
@@ -23,11 +33,38 @@ import { useTheme } from '@/theme';
 export default function SignInScreen() {
   const theme = useTheme();
   const configured = isSupabaseConfigured();
+  const implemented = isSignInImplemented();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const canAttempt = configured && email.trim().length > 0 && password.length > 0;
+  const ready = configured && implemented;
+  const canAttempt = ready && email.trim().length > 0 && password.length > 0 && !submitting;
+
+  const handleSignIn = async () => {
+    const handler = getSignInHandler();
+    if (!handler || submitting) return;
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await handler.signInWithEmail(email.trim(), password);
+      if (result.status === 'error') {
+        setError(result.message);
+      } else if (result.status === 'unavailable') {
+        setError(result.message);
+      }
+      // On success: do nothing here. SessionProvider observes the new session
+      // and the (auth) layout redirects. Navigating manually would be claiming
+      // success before the session actually exists.
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <Screen testID="screen-sign-in" edgeBottom>
@@ -62,6 +99,7 @@ export default function SignInScreen() {
           autoComplete="email"
           textContentType="emailAddress"
           returnKeyType="next"
+          disabled={submitting}
           testID="input-email"
         />
 
@@ -75,30 +113,48 @@ export default function SignInScreen() {
           autoComplete="current-password"
           textContentType="password"
           returnKeyType="done"
+          disabled={submitting}
+          onSubmitEditing={canAttempt ? handleSignIn : undefined}
           containerStyle={{ marginTop: theme.spacing.lg }}
           testID="input-password"
         />
 
+        {error ? (
+          <Text
+            variant="caption"
+            tone="red"
+            accessibilityLiveRegion="polite"
+            style={{ marginTop: theme.spacing.md }}
+            testID="sign-in-error">
+            {error}
+          </Text>
+        ) : null}
+
         <Button
-          label={configured ? 'Sign in' : 'Sign in unavailable'}
-          onPress={() => {
-            // Intentionally empty. Authentication is the auth feature's work.
-            // Wiring a fake success here would be exactly the kind of pretend
-            // behaviour the foundation must not ship.
-          }}
+          label={ready ? 'Sign in' : 'Sign in unavailable'}
+          onPress={handleSignIn}
           disabled={!canAttempt}
+          loading={submitting}
           accessibilityHint={
-            configured
+            ready
               ? 'Signs you in to Shoogle'
-              : 'Unavailable until the backend is configured'
+              : implemented
+                ? 'Unavailable until the backend is configured'
+                : 'Unavailable until sign-in is implemented'
           }
           style={{ marginTop: theme.spacing['2xl'] }}
           testID="button-sign-in"
         />
 
-        <Text variant="caption" tone="muted2" align="center" style={{ marginTop: theme.spacing.lg }}>
-          Authentication is not implemented in the foundation build.
-        </Text>
+        {!implemented ? (
+          <Text
+            variant="caption"
+            tone="muted2"
+            align="center"
+            style={{ marginTop: theme.spacing.lg }}>
+            Authentication is not implemented in the foundation build.
+          </Text>
+        ) : null}
       </View>
     </Screen>
   );
