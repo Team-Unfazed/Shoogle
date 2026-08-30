@@ -65,6 +65,26 @@ function walk(node: TreeNode | string | null, visit: (n: TreeNode) => void): voi
   for (const child of node.children ?? []) walk(child, visit);
 }
 
+/**
+ * How much a `hitSlop` adds to a control's VERTICAL touch height.
+ *
+ * React Native accepts two forms and both ship in this app: a number (all four
+ * edges) and a `Rect` (`{ top, bottom, left, right }`, any edge optional).
+ * Reading only the number form scored `components/ui/Tabs.tsx` — 36pt tall with
+ * `hitSlop={{ top: 4, bottom: 4 }}`, so 44pt to a finger — as an undersized
+ * target on every screen that uses it. A checker that reports a compliant
+ * control as a failure is as harmful as one that misses a real one: it teaches
+ * the team to ignore the result.
+ */
+function verticalHitSlop(hitSlop: unknown): number {
+  if (typeof hitSlop === 'number') return hitSlop * 2;
+  if (typeof hitSlop !== 'object' || hitSlop === null) return 0;
+  const rect = hitSlop as { top?: unknown; bottom?: unknown };
+  const top = typeof rect.top === 'number' ? rect.top : 0;
+  const bottom = typeof rect.bottom === 'number' ? rect.bottom : 0;
+  return top + bottom;
+}
+
 export interface QaReport {
   /** Declared widths wider than the viewport. */
   overflow: { width: number; testID?: string }[];
@@ -128,8 +148,7 @@ export function auditRenderedTree(tree: TreeNode | string | null, viewportWidth:
     }
 
     // hitSlop legitimately extends a small glyph to a compliant target.
-    const hitSlop = props.hitSlop;
-    const slop = typeof hitSlop === 'number' ? hitSlop * 2 : 0;
+    const slop = verticalHitSlop(props.hitSlop);
     if (declared + slop < control.minTouchTarget) {
       report.smallTargets.push({
         height: declared,
@@ -218,6 +237,36 @@ describe('the QA harness itself', () => {
       },
     };
     expect(auditRenderedTree(tree, 390).smallTargets).toEqual([]);
+  });
+
+  it('accepts a short target that a Rect hitSlop brings up to the floor', () => {
+    // The exact shape `components/ui/Tabs.tsx` ships: 36 + 4 + 4 = 44.
+    const tree: TreeNode = {
+      type: 'View',
+      props: {
+        accessibilityRole: 'tab',
+        accessibilityLabel: 'Segmented tab',
+        style: { minHeight: 36 },
+        hitSlop: { top: 4, bottom: 4 },
+      },
+    };
+    expect(auditRenderedTree(tree, 390).smallTargets).toEqual([]);
+  });
+
+  it('still fails a Rect hitSlop that does not reach the floor', () => {
+    // Horizontal slop does not make a control taller, so it must not count.
+    const tree: TreeNode = {
+      type: 'View',
+      props: {
+        accessibilityRole: 'tab',
+        accessibilityLabel: 'Too short',
+        style: { minHeight: 36 },
+        hitSlop: { left: 12, right: 12, top: 1 },
+      },
+    };
+    expect(auditRenderedTree(tree, 390).smallTargets).toEqual([
+      { height: 36, label: 'Too short' },
+    ]);
   });
 
   it('detects an unlabelled control', () => {

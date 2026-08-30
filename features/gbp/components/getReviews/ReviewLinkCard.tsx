@@ -96,7 +96,11 @@ export function ReviewLinkCard({
             onPress={onUseDraft}
             size="medium"
             disabled={draft.trim().length === 0}
-            accessibilityHint="Checks the link is a Google review link, then builds the QR code"
+            accessibilityHint={
+              draft.trim().length === 0
+                ? 'Disabled. Paste your Google review link in the field above first.'
+                : 'Checks the link is a Google review link, then builds the QR code'
+            }
             style={{ marginTop: theme.spacing.md }}
           />
 

@@ -67,6 +67,16 @@ export function SendRequestCard({
   const theme = useTheme();
   const blocked = disabledReason !== null;
   const hasNumber = phone.trim().length > 0;
+  /**
+   * The reason, said to TalkBack on the control itself.
+   *
+   * The amber line below the row states it visually, but a screen-reader user
+   * moving button by button hears "Copy message, dimmed" and nothing else — the
+   * explanation is several swipes away, and only if they keep going. The two
+   * secondary buttons previously carried no hint at all. "Disabled." leads,
+   * because that is the fact the owner needs before the reason for it.
+   */
+  const blockedHint = disabledReason === null ? null : `Disabled. ${disabledReason}`;
 
   return (
     <Card testID={testID}>
@@ -118,7 +128,7 @@ export function SendRequestCard({
         onPress={onSendWhatsApp}
         disabled={blocked}
         accessibilityHint={
-          disabledReason ??
+          blockedHint ??
           'Opens WhatsApp with this message ready to send. You confirm afterwards whether it went.'
         }
         leading={<Ionicons name="logo-whatsapp" size={19} color={theme.colors.onAccent} />}
@@ -134,6 +144,9 @@ export function SendRequestCard({
           fullWidth={false}
           disabled={blocked}
           onPress={onShareAnotherWay}
+          accessibilityHint={
+            blockedHint ?? 'Opens the Android share sheet with this message.'
+          }
           style={styles.secondary}
         />
         <Button
@@ -144,6 +157,9 @@ export function SendRequestCard({
           fullWidth={false}
           disabled={blocked}
           onPress={onCopyMessage}
+          accessibilityHint={
+            blockedHint ?? 'Copies this message to the clipboard so you can paste it anywhere.'
+          }
           style={styles.secondary}
         />
       </View>

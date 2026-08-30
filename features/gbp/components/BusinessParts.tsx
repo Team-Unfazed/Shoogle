@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/ui';
 import { useTheme } from '@/theme';
-import type { AccentName } from '@/theme/tokens';
+import { control, type AccentName } from '@/theme/tokens';
 
 /**
  * Business tab composition pieces. Feature owner: Pranay.
@@ -377,7 +377,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
 
+  /**
+   * `minHeight` is not what makes this row tall — the 44pt tile plus 16pt of
+   * padding above and below already do, at 76pt. It is here so the height is
+   * DECLARED: the Android QA walker can only check a target it can read, and
+   * every one of the Business tab's navigation rows was previously reported as
+   * UNDETERMINED, which is not a pass. Stating the floor turns eleven unchecked
+   * controls into eleven checked ones and changes nothing on screen.
+   */
   navRow: {
+    minHeight: control.minTouchTarget,
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
@@ -394,5 +403,13 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
   },
 
-  advice: { flexDirection: 'row', alignItems: 'flex-start', borderRadius: 16, padding: 14 },
+  // Same reason as `navRow`: declared so the 44pt floor is verifiable, not to
+  // change the layout. One line of 20pt text inside 14pt padding is 48pt.
+  advice: {
+    minHeight: control.minTouchTarget,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 16,
+    padding: 14,
+  },
 });

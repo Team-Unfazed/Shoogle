@@ -301,3 +301,108 @@ Everything from session 1, plus:
 Days 5-7 (integration regression, Android QA across all 13 routes, sign-off) are
 running. After that the vertical is complete up to the provider blocker, and the
 next real progress is the GBP access application.
+
+---
+
+## Date
+
+2026-08-30 - Sprint day 5 (session 5)
+
+## Task
+
+The honest-state regression matrix: drive every screen that reads a provider
+through every `DataState`, plus the four Voice of Merchant outcomes and a
+verification-required read, and prove the product's promises hold in each.
+
+## What I changed
+
+`__tests__/seo-data-states.test.tsx` (mine, new) now stands at 1132 tests over
+13 routes and 9 presentational surfaces. Three walkers judge every render:
+`bareZeros` (a zero passes only when the sentence around it names the
+measurement it came from), `rankClaims` and `fixtureLeaks`. The dead-control
+checker `auditRenderedTree` is imported from the day-4 Android harness rather
+than copied.
+
+Three things this session added on top of the matrix that was already there:
+
+1. **Loose zero-proofs removed.** Seven surfaces vouched for their zeros with a
+   bare subject word - `/photo/i` on the photos screen, `/areas/i` on areas,
+   `/checked/i` on visibility. Each matches the heading of the screen it sits
+   on, so it would have cleared any zero that screen ever rendered, including
+   an invented one. An experiment confirmed none of them was load-bearing: with
+   all seven emptied the suite still passed, because those screens render no
+   zero in any reachable state. A proof must NAME THE MEASUREMENT.
+2. **The zero census now runs in fixture mode too.** It previously judged zeros
+   only with fixtures off - which is the state where the screens have no values
+   at all. Fixture mode is the only way most of them reach `ready` today, so it
+   was the only place their real zeros could be seen, and nothing was looking.
+   Emptying every proof list makes searches and performance fail there, so the
+   new pass is not vacuous.
+3. **Dead controls are now checked in every state, on every route**, which the
+   file had only done for the retry button.
+4. **Two more routes are driven through the adapter, not just the registry.**
+   `performance` (`getPerformanceReport`) and `agent` (`getVoiceOfMerchant`,
+   behind a ready `listLocations`) were only ever seen in `not_connected` and
+   fixture mode, although the mock seam for both already existed. The agent's
+   Voice of Merchant read is the one that decides whether Shoogle claims it may
+   act, so leaving it undriven was the least defensible gap in the file. Both
+   pass: every non-ready answer reaches the owner as the provider's own
+   sentence.
+
+## Files changed
+
+- `__tests__/seo-data-states.test.tsx` - the matrix (mine, new).
+- `features/gbp/components/getReviews/SendRequestCard.tsx` - defect fix.
+- `features/gbp/components/getReviews/ReviewLinkCard.tsx` - defect fix.
+
+## Defects found and fixed
+
+**Two greyed buttons with no reason attached to them** (P2, both in
+`SendRequestCard`). "Share another way" and "Copy message" are disabled
+whenever there is no review link - the shipping state - and carried no
+`accessibilityHint` at all. The amber reason line under the row served a
+sighted owner; a TalkBack user moving control by control heard "Copy message,
+dimmed" and nothing else, with the explanation several swipes away. Both now
+say `Disabled. <reason>`, matching the primary send button.
+
+`ReviewLinkCard`'s "Use this link" had the same shape in miniature: its hint
+described what the button does when it works, never why it was grey. Now
+conditional.
+
+The convention the walker enforces is that a disabled control states the fact
+FIRST in its own hint - `Disabled. <why>` - because that is what the owner
+needs before the reason for it. A `loading` button is exempt: `Button` sets
+`disabled` while busy, and `busy` plus a progress label already announce it.
+
+## Current state
+
+`npx tsc --noEmit`, `npx expo lint` and `npx jest` are all clean: 42 suites,
+2183 tests. No `any`, no `ts-ignore`, no skipped test.
+
+States that cannot be reached are recorded in the file's `UNREACHABLE` ledger
+with the reason, the component is still driven through them, and two tests
+check the ledger's claims against the screens rather than trusting the prose.
+
+## Known issues
+
+- The get-reviews route greys three controls in the state that ships. That is
+  correct - there is no review link yet - but it means the first thing an owner
+  meets on that screen is three dead buttons and an amber sentence. Worth a
+  design look once a link can actually be fetched.
+- `measuredZeroProofs` lists are now minimal by construction. If a screen
+  legitimately starts rendering a measured zero, its test will fail until
+  somebody adds the sentence that proves it. That is the intended cost.
+
+## Things future sessions must NOT change
+
+Everything from sessions 1-4, plus:
+
+- **Do not widen a `measuredZeroProofs` entry to a single common word.** It
+  turns the census into decoration.
+- **Do not drop `expectZerosProven` from the fixture-mode pass.** It is where
+  the only real zeros in the vertical are visible.
+- **Do not add a disabled control without `Disabled. <why>` in its hint.**
+
+## Next step
+
+Day 6: Android QA across all 13 routes at 390x844 and 412x915.
