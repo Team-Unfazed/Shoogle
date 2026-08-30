@@ -13,7 +13,7 @@ import {
   RatingRow,
   VisibilityHero,
 } from '@/features/gbp/components/BusinessParts';
-import { businessFixture } from '@/fixtures/business';
+import { getBusinessFixture, RANK_NOT_MEASURABLE_MESSAGE } from '@/fixtures/business';
 import { isFixtureModeEnabled } from '@/lib/env';
 import {
   ALL_PROVIDER_IDS,
@@ -49,7 +49,9 @@ export default function BusinessScreen() {
   const insets = useSafeAreaInsets();
   const { isPreview } = useSession();
 
-  const data = isFixtureModeEnabled() || isPreview ? businessFixture : null;
+  // Gated accessor: returns null outside development, so a release build
+  // cannot reach fixture content at all.
+  const data = isFixtureModeEnabled() || isPreview ? getBusinessFixture() : null;
   const showFixtureBanner = data !== null && !isPreview;
 
   const notBuilt = (what: string) => () =>
@@ -136,16 +138,25 @@ export default function BusinessScreen() {
             onPress={notBuilt('Reviews')}
           />
 
+          {/*
+            Google exposes no rank position through any API. This row states
+            that permanently rather than showing a count that implies ranks are
+            coming. What Shoogle CAN show is which searches surfaced the
+            business, which lives under "What people searched".
+          */}
           <BusinessNavRow
             title="Search rankings"
-            subtitle={
-              data
-                ? `${data.rankings.tracked} keywords tracked · ${data.rankings.improved} improved`
-                : 'Not measured yet'
-            }
+            subtitle={RANK_NOT_MEASURABLE_MESSAGE}
             icon="trending-up"
-            accent="green"
-            onPress={notBuilt('Search rankings')}
+            accent="neutral"
+            onPress={() =>
+              toast.show({
+                message:
+                  'Google does not publish rank positions through its API. Shoogle shows what people actually searched instead.',
+                tone: 'neutral',
+                durationMs: 5000,
+              })
+            }
           />
 
           <BusinessNavRow

@@ -199,6 +199,52 @@ describe('Business', () => {
   });
 
   /**
+   * REGRESSION GUARD — this shipped once and had to be caught by review.
+   *
+   * The fixture carried { key: 'rank', label: 'Avg. rank', value: '#6.4' } and
+   * a rankings: { tracked, improved } block, rendered as a headline number with
+   * a green up-arrow. Google publishes NO rank position through any API — not
+   * rate-limited, not approval-gated, it does not exist. Showing one teaches a
+   * capability that will never arrive.
+   */
+  it('never renders a search rank position', async () => {
+    mockFixtures = true;
+    await renderScreen('business', BusinessScreen);
+
+    expect(screen.queryByText('Avg. rank')).toBeNull();
+    expect(screen.queryByText('#6.4')).toBeNull();
+    // No rank-shaped value anywhere on the screen.
+    expect(screen.queryByText(/^#d/)).toBeNull();
+    // And no "N keywords tracked" count implying ranks are being measured.
+    expect(screen.queryByText(/keywords tracked/i)).toBeNull();
+  });
+
+  it('states plainly that rank is not measurable, rather than "not yet"', async () => {
+    mockFixtures = true;
+    await renderScreen('business', BusinessScreen);
+
+    expect(screen.getByText('Search rankings')).toBeOnTheScreen();
+    expect(screen.getByText('Google does not publish rank positions')).toBeOnTheScreen();
+    // "coming soon" would imply there is something to wait for. There is not.
+    expect(screen.queryByText(/coming soon/i)).toBeNull();
+  });
+
+  it('shows only metrics Google still exposes', async () => {
+    mockFixtures = true;
+    await renderScreen('business', BusinessScreen);
+
+    // Survived Google's 2023 removals.
+    expect(screen.getByText('Google views')).toBeOnTheScreen();
+    expect(screen.getByText('Calls')).toBeOnTheScreen();
+    expect(screen.getByText('Website taps')).toBeOnTheScreen();
+
+    // Deleted by Google in 2023 with no replacement — must never appear.
+    for (const gone of [/post views/i, /photo views/i, /direct searches/i, /discovery searches/i]) {
+      expect(screen.queryByText(gone)).toBeNull();
+    }
+  });
+
+  /**
    * The important one. Fixture SEO content must never bleed into the real
    * connection state: the registry is the only source for those rows.
    */
