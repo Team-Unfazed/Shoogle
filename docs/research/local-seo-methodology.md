@@ -112,7 +112,8 @@ Split deliberately, because they are not the same kind of fact.
   `accounts.locations.media` in the **legacy Google My Business API v4.9**, not in
   the v1 APIs. This matters: two different API surfaces, two different enablement
   requests.
-- The twelve `DailyMetric` values (Performance API v1) listed in §4.4.
+- The eleven real `DailyMetric` values (Performance API v1) listed in §4.4, plus a twelfth
+  enum member `DAILY_METRIC_UNKNOWN` which is a sentinel and must never be rendered as a metric.
 - Places API India pricing and free tiers (§4.2).
 
 **Third-party practitioner heuristics** (from `claude-seo`, sourced there to

@@ -532,22 +532,30 @@ Business Information API per-operation daily caps:
 - **Create Location — 300 QPD**
 - **SearchGoogleLocation — 300 QPD**
 - **Update Location — 10,000 QPD**
-- **10 per minute per Google Business Profile — "cannot be increased"** ← a hard per-merchant
-  ceiling that no quota increase touches.
+- **Edits — 10 per minute per Google Business Profile, "cannot be increased."** The page scopes
+  this to **Edits**, not to reads. It is a hard per-merchant *write* ceiling that no quota
+  increase touches.
 
 **0 QPM means the access request was not approved.**
 <https://developers.google.com/my-business/content/prereqs>
 
 Quota increases: use the support form, select **"Quota Increase Request"**, and supply company
 name, contact email and Google Cloud project number; the website domain and email domain should
-match. Requests are typically denied when traffic is spiky rather than distributed, or when average
-usage sits below roughly 70% of the current limit.
+match. Requests are typically denied when traffic is spiky rather than distributed, or — verbatim
+from the page — if *"Your average usage is less than 50% of your current QPM limit."*
 <https://developers.google.com/my-business/content/limits>
 
-> **Design consequence.** The real constraint is **10 QPM per merchant profile**, not 300 QPM
-> overall. A single "refresh everything" tap that fans out to locations + reviews + performance +
-> attributes can trip it for one salon. Serialise per-merchant calls, back off on 429, and map
-> throttling to `unavailable('rate_limited', …)` — a reason code `DataState` already has.
+> **Design consequence — corrected.** An earlier draft of this section read the 10/minute figure
+> as a general per-merchant ceiling on *all* calls and concluded that every per-merchant read must
+> be serialised. That was wrong, and the adversarial review caught it against the source page.
+>
+> **Reads** are governed by the 300 QPM per-API limit. A "refresh everything" tap that fans out to
+> locations + reviews + performance + attributes is fine.
+>
+> **Edits** are where the ceiling actually bites: 10 per minute per profile, uncapped by any quota
+> request. So the thing that needs a queue is the WRITE path — a bulk hours, attributes or
+> category fix across one profile can trip it easily. Build a write queue with backoff, and map
+> throttling to `unavailable('rate_limited', …)`, a reason code `DataState` already has.
 
 ---
 
@@ -716,8 +724,9 @@ The conditions, ordered by how much they can hurt:
    idle until then.
 2. **OAuth app verification for `business.manage` is UNVERIFIED** and may add days or weeks before
    public release. Assume it applies.
-3. **10 QPM per merchant profile cannot be increased.** Design the refresh path around it now, not
-   after the first throttle in production.
+3. **Edits are capped at 10/minute per profile and cannot be increased.** This governs the WRITE
+   path only — reads run under the 300 QPM per-API limit. Build the write queue now, not after the
+   first throttle in production. A bulk hours or attributes fix is what trips it.
 4. **A large slice of the "marketing dashboard" people expect no longer exists.** Post views, photo
    views, query breakdowns and direction geography were deleted in 2023 with no replacement.
    Shoogle's honesty rules turn that from an embarrassment into a differentiator — but only if the

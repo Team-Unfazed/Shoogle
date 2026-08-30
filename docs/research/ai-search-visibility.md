@@ -8,6 +8,52 @@ labelled with its source and confidence. Anything I could not confirm from a
 first-party source is marked **UNVERIFIED** and must not be the basis of a
 shipped claim.
 
+---
+
+## ⚠ CORRECTIONS — read before acting on any section below
+
+An adversarial review re-fetched this document's citations. Five claims did not
+survive. They are corrected here rather than silently patched, because a reader
+who already acted on the original needs to know what changed.
+
+1. **§1.6 / §5.3 / §6.2 — the "cache lat/lng for up to 30 days" allowance is
+   NOT confirmed and is hereby demoted to UNVERIFIED.** The Places policies page
+   confirms the no-pre-fetch rule and the indefinite `place_id` exemption, and
+   says *nothing* about lat/lng or 30 days. `local-seo-methodology.md` §4.2
+   already said this was unconfirmed, so our own two reports contradicted each
+   other on a **data-retention constraint**. Do not design a caching layer on
+   this until someone reads the Maps Platform Service Specific Terms directly
+   and quotes the section number.
+
+2. **§7 is titled "WHAT SHOOGLE CAN SHIP" and claims everything in it needs no
+   credentials and no other owner's folder. That is false for three of eight
+   items.** Treat §7 as two lists:
+   - **7A — shippable today, zero credentials:** §7.1 AI Visibility Check,
+     §7.2 schema generation, §7.4 directory checklist, §7.7 readability.
+   - **7B — BLOCKED:** §7.3 (NAP check) and §7.6 (live Google reputation row)
+     need a Maps Platform billing account nobody has provisioned. §7.5 ("Ask an
+     AI") needs a Supabase edge function that does not exist — Sunny's area —
+     *and* a new component in `components/ui`, which is Aryan's.
+   Planning a sprint from the original §7 plans work that cannot start.
+
+3. **§1.3 / §2.3 / §6.7 — the Whitespark 540-query study is US-only** (Houston,
+   Phoenix, Denver; six industries). It contains **no Indian query set**. Do not
+   quote its AI-Overview prevalence figures to an Indian business owner as if
+   they described their market. The document's own principle — never tell a salon
+   owner a misleading average — applies to this citation.
+
+4. **§5.3 — `rating`, `userRatingCount` and `reviews` are in the
+   "Enterprise + Atmosphere" SKU**, not "Enterprise / Atmosphere", and the
+   correct source is the Place Details page, not the India pricing list, which
+   carries no field-to-SKU mapping. The 7,000-free-per-month conclusion and the
+   ~230-businesses arithmetic both survive; this is a citation fix.
+
+5. **§5.4 / §7.5 — the "5,000 free grounded prompts, then $14/1,000" figure is
+   MODEL-SPECIFIC (Gemini 3.x).** Gemini 2.5 is 1,500 RPD then $35/1,000 for
+   Search grounding and $25/1,000 for Maps grounding. The document names no
+   model, so a per-business cost cap built from it can be wrong by 2.5×. Name
+   the model wherever this number is used.
+
 > **Why this document exists.** An Indian salon owner is increasingly discovered
 > through an AI answer, not only through the map pack. Grexa does not address
 > this. Before we build anything, we need to know which of those signals are
