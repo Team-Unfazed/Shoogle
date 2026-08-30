@@ -132,7 +132,15 @@ export type AiTask =
   /** Draft the `description` property for LocalBusiness JSON-LD. */
   | 'schema_description'
   /** Ask a model a question a customer would ask, and show what it said. */
-  | 'answer_probe';
+  | 'answer_probe'
+  /**
+   * Draft a reply to one Google review.
+   *
+   * The draft is never sent anywhere on its own: the owner reads it, edits it,
+   * and submits it themselves, and Google then moderates what they submitted.
+   * Added for `app/seo/review-reply.tsx`.
+   */
+  | 'review_reply';
 
 export interface AiTextRequest {
   readonly task: AiTask;

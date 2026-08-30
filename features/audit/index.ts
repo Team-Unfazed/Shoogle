@@ -19,6 +19,17 @@
 
 export { runAuditEngine, type AuditEngineOptions, type AuditRun } from './engine';
 
+/**
+ * The one view component other features may embed.
+ *
+ * The Business tab shows the audit in miniature and links through to
+ * `/seo/audit`; exporting the card rather than the layout means the tab cannot
+ * end up with its own second opinion about the score, the top finding, or how
+ * much went unchecked. Everything else in `./components` stays private to this
+ * feature and to the report screen that owns it.
+ */
+export { AuditSummaryCard, type AuditSummaryCardProps } from './components/AuditSummaryCard';
+
 export {
   BREADTH_GATE,
   COVERAGE_GATE,
