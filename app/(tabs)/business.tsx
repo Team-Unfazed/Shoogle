@@ -124,10 +124,15 @@ export default function BusinessScreen() {
             </>
           )}
 
+          {/*
+            No `unanswered` count is passed. Whether GBP's review `reply` field
+            reflects replies posted outside Shoogle is not established, so that
+            number cannot be honestly measured yet — it is omitted rather than
+            defaulted to 0.
+          */}
           <RatingRow
             rating={data?.reviews.rating ?? null}
             total={data?.reviews.total ?? null}
-            unanswered={data?.reviews.unanswered ?? 0}
             onPress={notBuilt('Reviews')}
           />
 

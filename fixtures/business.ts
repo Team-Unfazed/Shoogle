@@ -23,7 +23,13 @@ export interface BusinessFixture {
     filledSegments: number | null;
   };
   metrics: BusinessGridMetric[];
-  reviews: { rating: number | null; total: number | null; unanswered: number };
+  /**
+   * No `unanswered` field. Whether GBP's review `reply` field reflects replies
+   * posted outside Shoogle is unestablished, so an unanswered count cannot be
+   * honestly measured — a fixture must not model data the real provider cannot
+   * supply, or the UI gets built around a number that will never arrive.
+   */
+  reviews: { rating: number | null; total: number | null };
   rankings: { tracked: number; improved: number };
   gbpPosts: { status: string; needsAttention: boolean };
   website: { status: string; needsAttention: boolean };
@@ -45,7 +51,7 @@ export const businessFixture: BusinessFixture = {
     { key: 'rank', label: 'Avg. rank', value: '#6.4', delta: '2.1', direction: 'up' },
   ],
 
-  reviews: { rating: 4.8, total: 32, unanswered: 1 },
+  reviews: { rating: 4.8, total: 32 },
   rankings: { tracked: 6, improved: 4 },
   gbpPosts: { status: 'Last post expire ho gaya', needsAttention: true },
   website: { status: 'Ready for your review', needsAttention: true },
