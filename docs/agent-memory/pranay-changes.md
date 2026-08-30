@@ -152,3 +152,152 @@ None yet.
 Complete the research and design pass now running (GBP capability matrix,
 competitive teardown, AI-search opportunity, local-SEO audit methodology), then
 implement the audit engine and Business tab against its output.
+
+---
+
+## Date
+
+2026-08-30 · Sprint days 1-4 complete, days 5-7 in progress (session 2)
+
+## Task
+
+Build the SEO / GBP / Audit / Business vertical. Match the feature surface of
+Grexa AI (observed directly from a screen recording of their paid annual plan)
+while beating it on truthfulness.
+
+## Completed work
+
+**Research (4 reports, first-party cited, in `docs/research/`)**
+- `google-business-profile.md` — the capability matrix. Authoritative.
+- `local-seo-methodology.md` — the audit check registry and scoring model.
+- `ai-search-visibility.md` — AI-answer visibility, carrying a CORRECTIONS block.
+- `competitive-grexa.md` — competitor teardown.
+
+**Audit engine — `features/audit/`**
+34 checks across 9 areas, pure and synchronous, clock passed in as input.
+Coverage gate: below 70% measurable weight the whole report returns
+`unavailable('insufficient_data')` rather than a score built from half the
+signals. `fixableByShoogle` is true only where BOTH the capability matrix
+confirms the API write AND the provider declares the method — exactly D1, D2,
+F3, F4 today.
+
+**GBP adapter — `features/gbp/`**
+Endpoints across the split API family, honest error mapping (a 403 for missing
+quota is a different state from a 403 for an unverified location), all four
+Voice of Merchant outcomes, a write queue for the 10-edits-per-minute ceiling,
+and reply moderation state. Deliberately NOT registered — see below.
+
+**SEO + AI — `features/seo/`**
+Keyword impressions as a discriminated union rendering `<15`; the eleven live
+DailyMetric values plus the removed registry; AI visibility, schema generation,
+directory checklist, readability. Gemini client is `__DEV__`-gated and refuses
+non-fixture payloads.
+
+**13 routes under `app/seo/`** — audit, searches, visibility, reviews,
+review-reply, photos, performance, agent, get-reviews, profile, hours, areas.
+All reachable from the Business tab; a runtime test asserts every href resolves.
+
+**978 tests, 40 suites.** typecheck, lint and the Android bundle all clean.
+
+## Decisions made
+
+1. **The GBP provider is NOT registered.** `registerProvider('google_business')`
+   with a stub would delete the honest "Integration not built yet" caption and
+   flip the Connect button from correctly-disabled to enabled. The built-in
+   placeholder already returns `not_connected` for every method, which is the
+   truth. Do not register until a real `connect()` with token exchange exists.
+2. **Rank is never rendered.** Google publishes no rank position through any
+   API. `/seo/searches` ships instead: the real queries that surfaced the
+   listing. A fixture carrying `Avg. rank #6.4` was deleted for this reason.
+3. **Scoring stays inside the shared contract.** `AuditReport.score` is
+   non-nullable in `lib/` (Sunny's), so an unscoreable audit returns
+   `unavailable('insufficient_data')` for the whole report rather than shipping
+   a parallel adapter nobody calls. A PR to Sunny for `score: number | null`
+   remains open but is not blocking.
+4. **One implementation per shared concept.** Three copies of
+   `formatKeywordImpressions` and five copies of the date helpers each produced
+   real defects. Both are now single-sourced with tests that fail on a second
+   declaration.
+5. **Google post composing is NOT built.** `'google_business'` is already a
+   `ProviderId` that Yash's `SocialPublisher` targets. Needs a written handoff.
+6. **Business setup / onboarding is NOT built.** That is Aryan's ownership.
+   Only in-context asks were shipped.
+
+## Bugs found and fixed
+
+- `business.tsx` rendered unknown review counts as `0`, and `0 total` beside a
+  4.8 rating. The unanswered count was removed entirely rather than made
+  nullable, because GBP research could not establish whether the reply field
+  reflects replies posted outside Shoogle.
+- A fixture rendered `Avg. rank #6.4` with an up-arrow — data Google never
+  publishes.
+- Three `formatKeywordImpressions` implementations rendered `1,240` and `1240`
+  for the same input, decided by which barrel a screen imported.
+- `formatTimeOfDay` rejected hour 24, which `google.type.TimeOfDay` permits for
+  closing times. Every business closing at midnight had its hours silently
+  dropped and then failed the audit's hours check.
+- `daysBetween` returned NaN in one copy and null in another; `NaN >= 7` is
+  false, so a corrupt timestamp behaved exactly like a fresh one. Consolidating
+  exposed `null <= 90` evaluating TRUE — posts with unreadable dates were being
+  counted as recent.
+- CI's secret scan matched only Google's legacy `AIza` format, missing `AQ.`
+  (current AI Studio keys) and `GOCSPX-` (OAuth client secrets — the exact
+  credential this vertical will handle).
+- `components/ui/Tabs` had 36pt touch targets against a documented 44pt floor.
+  Fixed with `hitSlop` — behaviour only, no pixels moved. **Aryan owns that
+  file and should review it.**
+
+## API status
+
+**Google Business Profile: NOT CONFIGURED, and blocked on a calendar, not code.**
+
+Access requires managing a GBP **verified and active for 60+ days** with a
+matching website, then up to 14 days review. Shoogle has no profile of its own,
+so that clock has not started.
+
+**The unblock:** Google's wording is "*manage* a Google Business Profile", not
+own one. The Vahan Ready profile Pranay manages may already satisfy the 60-day
+requirement, which would move the application from ~2.5 months away to this
+week. Three things to confirm: owner/manager role on that profile, verified 60+
+days, and a website on a domain matching the applying email.
+
+OAuth consent-screen verification is a SEPARATE queue and should be started in
+parallel.
+
+Variable names only: `EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID_ANDROID`,
+`GOOGLE_OAUTH_CLIENT_ID_WEB`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GEMINI_API_KEY`.
+
+## Real test results
+
+**None. No provider call has been made and no provider response has been
+simulated.** Every screen renders `not_connected` by default, which is the
+honest state, and that state is the most thoroughly tested one.
+
+## Blockers
+
+1. **GBP API access** — see above. Nothing in the codebase can shorten it.
+2. **Server-side proxy for AI** — production Gemini needs one; Sunny's area.
+   Development works `__DEV__`-gated against fixtures.
+3. **Yash** — whether Google posts route through `SocialPublisher`.
+4. **Aryan** — who captures business identity, and review of the `Tabs` hitSlop.
+5. **`AuditReport.score: number | null`** — a one-line PR to Sunny.
+
+## Things future sessions must NOT change
+
+Everything from session 1, plus:
+
+- **Do not register the GBP provider** until a real `connect()` exists.
+- **Do not render a rank position** anywhere, in any state, ever.
+- **Do not re-introduce a second `formatKeywordImpressions`, `daysBetween` or
+  `addDays`.** Tests fail on a second declaration; that is deliberate.
+- **Do not make `daysBetween` return NaN again**, and check its null explicitly
+  before comparing — `null <= n` is true.
+- **Do not un-gate the Gemini client from `__DEV__`** without a server proxy.
+- **Do not soften `unavailable('not_supported')` on the metrics Google removed
+  in 2023** into "coming soon". There is nothing coming.
+
+## Next step
+
+Days 5-7 (integration regression, Android QA across all 13 routes, sign-off) are
+running. After that the vertical is complete up to the provider blocker, and the
+next real progress is the GBP access application.
