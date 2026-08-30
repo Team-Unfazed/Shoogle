@@ -185,15 +185,10 @@ export const CAP_REVIEW_REPLY: FixCapability = {
 /* Small pure utilities                                                       */
 /* -------------------------------------------------------------------------- */
 
-const MS_PER_DAY = 86_400_000;
-
-/** Whole days from `fromIso` to `toIso`. Negative when `toIso` is earlier. */
-export function daysBetween(fromIso: string, toIso: string): number {
-  const from = Date.parse(fromIso);
-  const to = Date.parse(toIso);
-  if (Number.isNaN(from) || Number.isNaN(to)) return Number.NaN;
-  return Math.floor((to - from) / MS_PER_DAY);
-}
+// Date arithmetic lives in one place — see features/audit/dates.ts for why.
+// daysBetween returns `number | null`: an unreadable date is unknown, and NaN
+// silently passed every comparison it was ever used in.
+export { MS_PER_DAY, daysBetween, addDays, isParsableDate } from '../dates';
 
 /** Newest ISO timestamp in a list, or null for an empty list (a measured zero). */
 export function newestTimestamp(times: readonly string[]): string | null {
@@ -284,8 +279,4 @@ export function isoDate(iso: string): string {
   return iso.slice(0, 10);
 }
 
-/** Adds whole days to an ISO date string, returning YYYY-MM-DD. */
-export function addDays(isoDateString: string, days: number): string {
-  const ms = Date.parse(`${isoDateString}T00:00:00.000Z`);
-  return new Date(ms + days * MS_PER_DAY).toISOString().slice(0, 10);
-}
+

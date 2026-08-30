@@ -218,8 +218,12 @@ export function buildSnapshot({
   capabilities,
   period,
   endDate,
-}: BuildSnapshotOptions): PerformanceSnapshot {
+}: BuildSnapshotOptions): PerformanceSnapshot | null {
   const windows = buildWindows(endDate, period.days);
+  // No window means no period to report against. Returning an empty snapshot
+  // would render eleven rows of "not reported", which blames Google for a date
+  // we could not parse ourselves. Null lets the screen say what really happened.
+  if (windows === null) return null;
 
   const byMetric = new Map<LiveDailyMetric, readonly GbpDailyPoint[]>();
   for (const entry of series) byMetric.set(entry.metric, entry.points);
@@ -277,7 +281,7 @@ export function snapshotFromResponse(
   capabilities: ProfileCapabilities,
   period: GbpPerformancePeriod,
   endDate: string,
-): PerformanceSnapshot {
+): PerformanceSnapshot | null {
   const series: PerformanceSeries[] = extractSeries(response).map((entry) => ({
     metric: entry.metric,
     points: entry.points,

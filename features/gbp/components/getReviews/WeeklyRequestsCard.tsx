@@ -55,19 +55,13 @@ export function WeeklyRequestsCard({
         {(summary) => (
           <View>
             <View style={[styles.countRow, { marginTop: theme.spacing.sm }]}>
-              <Text
-                testID="weekly-requests-count"
-                accessibilityRole="header"
-                style={{
-                  fontFamily: theme.fontFamily.display,
-                  fontSize: 29,
-                  lineHeight: 36,
-                  letterSpacing: -0.58,
-                  color: theme.colors.text,
-                }}>
+              <Text testID="weekly-requests-count" variant="display">
                 {summary.confirmed}
               </Text>
-              <Text variant="body" tone="muted" style={{ marginBottom: 5, marginLeft: 6 }}>
+              <Text
+                variant="body"
+                tone="muted"
+                style={{ marginBottom: theme.spacing.xs, marginLeft: theme.spacing.sm }}>
                 {`of ${summary.suggested} suggested this week`}
               </Text>
             </View>

@@ -82,6 +82,16 @@ export function Tabs<T extends string>({
               }
               accessibilityState={{ selected }}
               android_ripple={{ color: theme.colors.border, borderless: false }}
+              /*
+                The design's segmented control is 36pt tall, but the Android
+                floor is 44 (theme/tokens.ts: "nothing pressable may be smaller").
+                Shrinking the visual to satisfy the floor would break the
+                transcription; ignoring the floor would ship a control that is
+                genuinely hard to hit, on five screens.
+                hitSlop resolves it: 4pt above and below extends the touch area
+                to 44 without moving a pixel.
+              */
+              hitSlop={{ top: 4, bottom: 4 }}
               style={({ pressed }) => [
                 styles.tab,
                 {

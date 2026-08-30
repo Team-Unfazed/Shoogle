@@ -41,9 +41,27 @@ const series = (
   ],
 });
 
-const WEEK = buildWindows('2020-01-07', 7);
+
+/**
+ * buildWindows / addDaysIso return null when a date will not parse. Every call
+ * in this file passes a literal, valid date, so null here means the date maths
+ * itself regressed — which should fail loudly rather than be cast away.
+ */
+function mustBuildWindows(endDate: string, days: number) {
+  const windows = buildWindows(endDate, days);
+  if (windows === null) throw new Error(`buildWindows returned null for a valid date: ${endDate}`);
+  return windows;
+}
+
+function mustAddDays(iso: string, days: number): string {
+  const result = addDaysIso(iso, days);
+  if (result === null) throw new Error(`addDaysIso returned null for a valid date: ${iso}`);
+  return result;
+}
+
+const WEEK = mustBuildWindows('2020-01-07', 7);
 const sevenDays = (values: (string | undefined)[]) =>
-  values.map((value, index) => ({ iso: addDaysIso('2020-01-01', index), value }));
+  values.map((value, index) => ({ iso: mustAddDays('2020-01-01', index), value }));
 
 describe('windows', () => {
   it('builds a window that ends on the last day we are willing to claim', () => {

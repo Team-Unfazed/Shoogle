@@ -148,6 +148,25 @@ afterEach(() => {
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * buildSnapshot returns null only when the endDate will not parse. Every call
+ * here passes a valid literal, so null means the date maths regressed and
+ * should fail loudly rather than be cast away.
+ */
+function mustSnapshotFromResponse(
+  ...args: Parameters<typeof snapshotFromResponse>
+) {
+  const snapshot = snapshotFromResponse(...args);
+  if (snapshot === null) throw new Error('snapshotFromResponse returned null for a valid endDate');
+  return snapshot;
+}
+
+function mustBuildSnapshot(options: Parameters<typeof buildSnapshot>[0]) {
+  const snapshot = buildSnapshot(options);
+  if (snapshot === null) throw new Error('buildSnapshot returned null for a valid endDate');
+  return snapshot;
+}
+
 describe('the five readings, side by side', () => {
   beforeEach(() => {
     mockFixtures = true;
@@ -283,7 +302,7 @@ describe('the sentinel and the rank that do not exist', () => {
   });
 
   it('drops the sentinel before a row is ever built', () => {
-    const snapshot = snapshotFromResponse(
+    const snapshot = mustSnapshotFromResponse(
       fixtureGbpPerformanceResponse,
       fixtureGbpProfileCapabilities,
       DEFAULT_PERIOD,
@@ -502,7 +521,7 @@ describe('the day-by-day chart', () => {
 const SALON: ProfileCapabilities = fixtureGbpProfileCapabilities;
 
 function snapshot28() {
-  return snapshotFromResponse(
+  return mustSnapshotFromResponse(
     fixtureGbpPerformanceResponse,
     SALON,
     DEFAULT_PERIOD,
@@ -646,7 +665,7 @@ describe('presentational helpers', () => {
   });
 
   it('refuses to chart a metric with no reported day', () => {
-    const empty = buildSnapshot({
+    const empty = mustBuildSnapshot({
       series: [{ metric: 'CALL_CLICKS', points: [{ date: '2020-06-28', kind: 'not_reported' }] }],
       capabilities: SALON,
       period: DEFAULT_PERIOD,

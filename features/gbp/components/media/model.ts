@@ -157,15 +157,12 @@ export type MediaAge =
   | { kind: 'known'; days: number; label: string }
   | { kind: 'unknown'; label: string };
 
-const MS_PER_DAY = 86_400_000;
+// Single source: features/audit/dates.ts. This module previously carried its
+// own copy which, unlike the audit one, correctly returned null — the two
+// disagreed on what an unreadable date means.
+import { daysBetween } from '@/features/audit/dates';
 
-/** Whole days between two RFC 3339 timestamps, or null if either is unparseable. */
-export function daysBetween(fromIso: string, toIso: string): number | null {
-  const from = Date.parse(fromIso);
-  const to = Date.parse(toIso);
-  if (Number.isNaN(from) || Number.isNaN(to)) return null;
-  return Math.floor((to - from) / MS_PER_DAY);
-}
+export { daysBetween };
 
 /**
  * The badge that sits on a media tile, e.g. "3 days ago".

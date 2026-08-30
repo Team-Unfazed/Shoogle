@@ -105,7 +105,10 @@ function contributingObservationAges(
       if (ages.has(key)) continue;
       const state = input.observations[key];
       if (state.status !== 'ready') continue;
-      ages.set(key, daysBetween(state.fetchedAt, input.now));
+      // null (unreadable) is preserved rather than coerced: the freshness gate
+      // partitions undated observations into their own bucket and fails on them.
+      const age = daysBetween(state.fetchedAt, input.now);
+      ages.set(key, age === null ? Number.NaN : age);
     }
   }
   return [...ages.entries()].map(([key, ageDays]) => ({ key, ageDays }));

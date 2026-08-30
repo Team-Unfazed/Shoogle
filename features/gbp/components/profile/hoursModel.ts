@@ -38,6 +38,7 @@ import {
   type HolidayCalendar,
   type HolidayEntry,
 } from '@/features/audit/data/india-holidays';
+import { addDays } from '@/features/audit/dates';
 
 import type {
   GbpDayOfWeek,
@@ -83,13 +84,29 @@ export const DAY_LABEL: Readonly<Record<GbpDayOfWeek, string>> = Object.freeze({
  * `google.type.TimeOfDay` omits zero fields, so an absent `hours` is genuinely
  * midnight — not a missing value. An out-of-range field is not: it is returned
  * as null so the caller counts the period as unreadable instead of clamping it.
+ *
+ * HOUR 24 IS LEGAL AND MEANS END OF DAY. The google.type.TimeOfDay spec says
+ * hours are 0-23, then adds: "An API may choose to allow the value '24:00:00'
+ * for scenarios like business closing time." GBP is exactly that scenario, and
+ * closing at midnight is completely ordinary for an Indian restaurant or salon.
+ *
+ * Rejecting 24 silently dropped those periods, so a business open until
+ * midnight appeared to have unreadable hours — losing real data and, worse,
+ * making the audit's hours check fire against a profile that was actually fine.
+ * It is accepted only at exactly 24:00; 24:30 is still nonsense.
  */
 export function formatTimeOfDay(time: GoogleTimeOfDay | undefined): string | null {
   if (time === undefined) return null;
   const hours = time.hours ?? 0;
   const minutes = time.minutes ?? 0;
-  if (!Number.isInteger(hours) || hours < 0 || hours > 23) return null;
+  if (!Number.isInteger(hours) || hours < 0 || hours > 24) return null;
   if (!Number.isInteger(minutes) || minutes < 0 || minutes > 59) return null;
+  // 24 is only meaningful as the exact end of the day.
+  if (hours === 24 && minutes !== 0) return null;
+
+  // "midnight" rather than "12:00 am", which reads as the START of a day and
+  // would make "9:00 am - 12:00 am" look like a fifteen-hour typo.
+  if (hours === 24) return 'midnight';
 
   const suffix = hours < 12 ? 'am' : 'pm';
   const twelve = hours % 12 === 0 ? 12 : hours % 12;
@@ -281,15 +298,10 @@ export interface FestivalPromptSet {
 }
 
 /** ISO date `days` after `fromDate`, computed in UTC so no timezone drifts it. */
-export function addDays(fromDate: string, days: number): string {
-  const parsed = Date.parse(`${fromDate}T00:00:00.000Z`);
-  if (Number.isNaN(parsed)) return fromDate;
-  const moved = new Date(parsed + days * 86_400_000);
-  const year = moved.getUTCFullYear();
-  const month = `${moved.getUTCMonth() + 1}`.padStart(2, '0');
-  const day = `${moved.getUTCDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+// Single source: features/audit/dates.ts. The copy that lived here returned
+// the INPUT unchanged when it could not parse — so a bad date produced a
+// plausible-looking wrong answer instead of an admission.
+export { addDays };
 
 export interface FestivalPromptOptions {
   /** Today, as `YYYY-MM-DD`. Injected so this stays pure and testable. */
@@ -323,6 +335,19 @@ export function buildFestivalPrompts(options: FestivalPromptOptions): FestivalPr
   const horizonDays = options.horizonDays ?? 90;
   const windowFrom = options.today;
   const windowTo = addDays(options.today, horizonDays);
+
+  if (windowTo === null) {
+    // We cannot say which festivals fall in a window we could not build. An
+    // empty prompt list would read as "nothing coming up", which is exactly the
+    // reassurance this module exists to refuse.
+    return {
+      prompts: [],
+      windowFullyCovered: false,
+      calendarVersion: calendar.version,
+      windowFrom,
+      windowTo: windowFrom,
+    };
+  }
 
   const lookup = findHolidaysInWindow(calendar, windowFrom, windowTo, options.stateCode);
 

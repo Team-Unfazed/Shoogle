@@ -140,6 +140,15 @@ function datedValuesFor(spec: SeriesSpec, metricIndex: number): GbpDatedValueWir
 
   for (let dayIndex = 0; dayIndex < FIXTURE_PERFORMANCE_DAY_COUNT; dayIndex += 1) {
     const iso = addDaysIso(FIXTURE_PERFORMANCE_FIRST_DAY, dayIndex);
+    // FIXTURE_PERFORMANCE_FIRST_DAY is a literal in this file, so null here
+    // means the shared date maths regressed rather than a bad input. Failing
+    // loudly beats emitting a day with a broken date that the pipeline would
+    // then silently discard, quietly shrinking the fixture window.
+    if (iso === null) {
+      throw new Error(
+        `Fixture date arithmetic failed for ${FIXTURE_PERFORMANCE_FIRST_DAY} + ${dayIndex} days`,
+      );
+    }
 
     // A date with no `value` is how Google says nothing for a day. We keep it
     // rather than dropping the row, because "there was a day here and we have

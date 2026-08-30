@@ -65,20 +65,14 @@ export function NewReviewsCard({ state, onRetry, testID }: NewReviewsCardProps) 
           return (
             <View>
               <View style={[styles.row, { marginTop: theme.spacing.sm }]}>
-                <Text
-                  testID="new-reviews-delta"
-                  accessibilityRole="header"
-                  style={{
-                    fontFamily: theme.fontFamily.display,
-                    fontSize: 29,
-                    lineHeight: 36,
-                    letterSpacing: -0.58,
-                    color: theme.colors.text,
-                  }}>
+                <Text testID="new-reviews-delta" variant="display">
                   {/* Unknown is an em dash, never 0 — see product rule 7. */}
                   {delta === null ? '—' : `${delta > 0 ? '+' : ''}${delta}`}
                 </Text>
-                <Text variant="body" tone="muted" style={{ marginBottom: 5, marginLeft: 6 }}>
+                <Text
+                  variant="body"
+                  tone="muted"
+                  style={{ marginBottom: theme.spacing.xs, marginLeft: theme.spacing.sm }}>
                   {delta === null ? 'new reviews this week' : 'reviews this week'}
                 </Text>
               </View>

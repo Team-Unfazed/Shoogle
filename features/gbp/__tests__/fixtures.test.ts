@@ -14,6 +14,13 @@ import { buildMetrics, buildWindows } from '@/features/gbp/performance';
 import { classifyVoiceOfMerchant } from '@/features/gbp/voiceOfMerchant';
 import { LIVE_DAILY_METRICS } from '@/features/seo';
 
+/** See performance.test.ts: null means the date maths regressed, not bad input. */
+function mustBuildWindows(endDate: string, days: number) {
+  const windows = buildWindows(endDate, days);
+  if (windows === null) throw new Error(`buildWindows returned null for ${endDate}`);
+  return windows;
+}
+
 /**
  * Google publishes no sandbox for the Business Profile APIs and recommends
  * mocked responses instead, so these fixtures ARE the sanctioned test path.
@@ -96,7 +103,7 @@ describe('the fixtures cover all four Voice of Merchant outcomes', () => {
 
 describe('the fixtures encode the honesty rules, not just shapes', () => {
   it('keeps a measured zero apart from an unreported day', () => {
-    const windows = buildWindows('2020-01-04', 4);
+    const windows = mustBuildWindows('2020-01-04', 4);
     const { metrics, omitted } = buildMetrics(fixturePerformanceResponse, windows, 'last 4 days');
     const byKey = new Map(metrics.map((metric) => [metric.key, metric]));
 
@@ -116,7 +123,7 @@ describe('the fixtures encode the honesty rules, not just shapes', () => {
   });
 
   it('never lets the DAILY_METRIC_UNKNOWN sentinel become a metric', () => {
-    const windows = buildWindows('2020-01-04', 4);
+    const windows = mustBuildWindows('2020-01-04', 4);
     const { metrics } = buildMetrics(fixturePerformanceResponse, windows, 'last 4 days');
     expect(metrics.map((metric) => metric.key)).not.toContain('daily_metric_unknown');
   });

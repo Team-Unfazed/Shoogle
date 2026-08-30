@@ -15,7 +15,16 @@
 
 import type { CheckDefinition, MediaCategory } from '../types';
 
-import { daysBetween, fail, need, newestTimestamp, notApplicable, pass, warn } from './helpers';
+import {
+  daysBetween,
+  fail,
+  need,
+  newestTimestamp,
+  notApplicable,
+  notChecked,
+  pass,
+  warn,
+} from './helpers';
 
 /** The four things a searcher wants to see, and which media categories satisfy each. */
 const PHOTO_BUCKETS: { label: string; categories: MediaCategory[] }[] = [
@@ -167,6 +176,10 @@ const E3: CheckDefinition = {
     }
 
     const ageDays = daysBetween(newest, ctx.now);
+    if (ageDays === null) {
+      // A photo whose date we cannot read is not a recent photo.
+      return notChecked('provider_error', 'Your newest photo has a date we could not read.');
+    }
     const evidence = [`Newest photo you added: ${newest.slice(0, 10)}`, `That is ${ageDays} days ago`];
     if (ageDays <= 90) return pass();
     if (ageDays <= 365) {

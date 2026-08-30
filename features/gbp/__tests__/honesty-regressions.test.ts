@@ -21,6 +21,13 @@ import { LIVE_DAILY_METRICS } from '@/features/seo';
 import { fixtureVoiceOfMerchantStates } from '@/fixtures/gbp';
 import { UNAVAILABLE_COPY } from '@/lib/state/DataState';
 
+/** See performance.test.ts: null means the date maths regressed, not bad input. */
+function mustBuildWindows(endDate: string, days: number) {
+  const windows = buildWindows(endDate, days);
+  if (windows === null) throw new Error(`buildWindows returned null for ${endDate}`);
+  return windows;
+}
+
 /**
  * Regression tests for five confirmed honesty violations.
  *
@@ -373,7 +380,7 @@ describe('the daily metric registry has a single source of truth', () => {
   });
 
   it('is the seo registry that features/gbp actually uses for keys and labels', () => {
-    const windows = buildWindows('2020-01-07', 7);
+    const windows = mustBuildWindows('2020-01-07', 7);
     const { metrics } = buildMetrics(
       {
         multiDailyMetricTimeSeries: [

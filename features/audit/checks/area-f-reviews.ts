@@ -290,6 +290,9 @@ const F5: CheckDefinition = {
     }
 
     const ageDays = daysBetween(newest, ctx.now);
+    if (ageDays === null) {
+      return notChecked('provider_error', 'Your newest review has a date we could not read.');
+    }
     const evidence = [`Newest review: ${newest.slice(0, 10)}`, `That is ${ageDays} days ago`];
     if (ageDays <= 21) return pass();
     if (ageDays <= 90) {

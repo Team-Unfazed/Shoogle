@@ -60,7 +60,7 @@ import {
 } from '@/features/gbp/components/performance';
 import { parsePerformancePeriod } from '@/features/gbp/performance';
 import { getGbpPerformanceFixtures, gbpPerformanceFixtureState } from '@/fixtures/gbp-performance';
-import { loading, mapData, type DataState } from '@/lib/state/DataState';
+import { failed, loading, mapData, type DataState } from '@/lib/state/DataState';
 import { useTheme } from '@/theme';
 
 /**
@@ -94,9 +94,24 @@ export default function PerformanceScreen() {
     if (fixtures === null) return null;
 
     const capabilities: ProfileCapabilities = fixtures.capabilities;
-    return gbpPerformanceFixtureState(
-      snapshotFromResponse(fixtures.response, capabilities, period, fixtures.endDate),
+    const snapshot = snapshotFromResponse(
+      fixtures.response,
+      capabilities,
+      period,
+      fixtures.endDate,
     );
+    // null means the fixture's own endDate would not parse — a bug in the
+    // fixture, not something Google did. Reporting it as an error keeps it
+    // visible instead of rendering eleven "not reported" rows that would read
+    // as Google's silence.
+    if (snapshot === null) {
+      return failed(
+        'gbp_fixture_end_date_unreadable',
+        'The development fixture has an end date Shoogle could not read.',
+        false,
+      );
+    }
+    return gbpPerformanceFixtureState(snapshot);
   }, [period]);
 
   useEffect(() => {

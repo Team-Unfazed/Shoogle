@@ -29,6 +29,7 @@ import {
   need,
   newestTimestamp,
   notApplicable,
+  notChecked,
   pass,
   warn,
 } from './helpers';
@@ -97,6 +98,12 @@ const G1: CheckDefinition = {
       return notApplicable('None of your posts carry a usable date.');
     }
     const ageDays = daysBetween(newest, ctx.now);
+    if (ageDays === null) {
+      // We have a post but cannot read its date. That is not a fresh post and
+      // it is not a stale one — it is unmeasured, and saying so is the only
+      // honest option.
+      return notChecked('provider_error', 'Your latest post has a date we could not read.');
+    }
     if (ageDays <= STALE_POST_DAYS) return pass();
 
     const evidence = [`Last post: ${newest.slice(0, 10)}`, `That is ${ageDays} days ago`];
@@ -145,9 +152,12 @@ const G2: CheckDefinition = {
       return notApplicable('Google does not allow posts on this listing.');
     }
 
-    const recent = localPosts.items.filter(
-      (p) => daysBetween(p.createTime, ctx.now) <= CADENCE_WINDOW_DAYS,
-    );
+    const recent = localPosts.items.filter((p) => {
+      const age = daysBetween(p.createTime, ctx.now);
+      // Guard the null explicitly: `null <= CADENCE_WINDOW_DAYS` coerces to 0
+      // and evaluates TRUE, which silently counted undateable posts as recent.
+      return age !== null && age <= CADENCE_WINDOW_DAYS;
+    });
     if (recent.length === 0) {
       return notApplicable('There are no posts from the last three months to judge.');
     }

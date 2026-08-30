@@ -24,6 +24,8 @@
 import { LIVE_DAILY_METRICS, isRenderableDailyMetric, type LiveDailyMetric } from '@/features/seo';
 import type { Metric } from '@/lib/providers/types';
 
+import { addDays } from '@/features/audit/dates';
+
 import type { DailyRange } from './endpoints';
 import type {
   GbpDailyPoint,
@@ -47,10 +49,14 @@ export function isoDate(date: Date): string {
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
 }
 
-export function addDaysIso(iso: string, days: number): string {
-  const [year, month, day] = iso.split('-').map(Number);
-  if (year === undefined || month === undefined || day === undefined) return iso;
-  return isoDate(new Date(Date.UTC(year, month - 1, day + days)));
+/**
+ * Kept as a named export because tests and date-range maths call it, but the
+ * implementation is now the shared one. The previous local copy returned its
+ * INPUT when the date would not parse, which quietly produced a wrong window
+ * rather than reporting that it could not build one.
+ */
+export function addDaysIso(iso: string, days: number): string | null {
+  return addDays(iso, days);
 }
 
 export function googleDateToIso(date: GoogleDate | undefined): string | null {
@@ -118,10 +124,18 @@ export interface GbpWindows {
  * so callers pass the last date they are willing to claim, and we never assume
  * today's numbers exist.
  */
-export function buildWindows(endDate: string, days: number): GbpWindows {
+export function buildWindows(endDate: string, days: number): GbpWindows | null {
+  // An unparseable endDate used to pass straight through, producing a window
+  // like { startDate: 'garbage', endDate: 'garbage' } that would have been sent
+  // to Google and come back as a confusing 400. Null says we could not build a
+  // range, which the caller can report honestly.
   const currentStart = addDaysIso(endDate, -(days - 1));
+  if (currentStart === null) return null;
   const previousEnd = addDaysIso(currentStart, -1);
+  if (previousEnd === null) return null;
   const previousStart = addDaysIso(previousEnd, -(days - 1));
+  if (previousStart === null) return null;
+
   return {
     current: { startDate: currentStart, endDate },
     previous: { startDate: previousStart, endDate: previousEnd },

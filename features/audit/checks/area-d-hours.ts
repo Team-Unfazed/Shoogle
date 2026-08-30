@@ -262,6 +262,13 @@ const D3: CheckDefinition = {
       });
     }
 
+    if (windowEnd === null) {
+      // `today` came from the audit clock. If it will not parse we cannot say
+      // which festivals fall in the window, and guessing the window would make
+      // every holiday finding below it unfounded.
+      return notChecked('check_error', 'We could not work out which festivals are coming up.');
+    }
+
     const { upcoming, windowFullyCovered } = findHolidaysInWindow(
       INDIA_HOLIDAY_CALENDAR,
       today,

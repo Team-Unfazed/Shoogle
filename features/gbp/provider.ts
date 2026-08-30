@@ -502,6 +502,12 @@ export function createGoogleBusinessProfileProvider(
 
     const location = locationName(locationId);
     const windows = buildWindows(latestDate(), parsed.days);
+    if (windows === null) {
+      // The clock produced a date we cannot do arithmetic on. Sending the
+      // resulting range to Google would return an opaque 400; saying so is
+      // more useful and cannot be mistaken for "no data".
+      return failed('gbp_window_unbuildable', 'Shoogle could not work out which dates to ask for.', true);
+    }
     const result = await sendExplained<GbpFetchMultiDailyMetricsResponse>(
       ctx,
       fetchMultiDailyMetricsRequest(location, LIVE_DAILY_METRIC_ORDER, windows.combined),
