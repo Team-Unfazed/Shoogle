@@ -118,8 +118,10 @@ export function computeScore(results: readonly CheckResult[], input: AuditInput)
   const totalEarnableWeight = areas.reduce((s, a) => s + a.earnableWeight, 0);
   const totalEarnedWeight = areas.reduce((s, a) => s + a.earnedWeight, 0);
 
+  // Null, never 0: "no check applies to this business" is a different fact from
+  // "we measured 0% of what applies". A 0 here would read as total ignorance.
   const overallCoverage =
-    totalApplicableWeight > 0 ? totalEarnableWeight / totalApplicableWeight : 0;
+    totalApplicableWeight > 0 ? totalEarnableWeight / totalApplicableWeight : null;
 
   const scored = results.filter((r) => r.check.scored);
   const applicableChecks = scored.filter(isApplicable);
@@ -148,12 +150,17 @@ export function computeScore(results: readonly CheckResult[], input: AuditInput)
   });
 
   // G-coverage — is the number built on enough of the picture?
+  // With nothing applicable there is no ratio to state, so the sentence has to
+  // change rather than printing "0% of what applies to you", which is false.
   gates.push({
     id: 'G-coverage',
-    passed: overallCoverage >= COVERAGE_GATE,
-    detail: `We measured ${Math.round(overallCoverage * 100)}% of what applies to you; a score needs at least ${Math.round(
-      COVERAGE_GATE * 100,
-    )}%.`,
+    passed: overallCoverage !== null && overallCoverage >= COVERAGE_GATE,
+    detail:
+      overallCoverage === null
+        ? 'Nothing we check applies to this business yet, so there is nothing to build a score from.'
+        : `We measured ${Math.round(overallCoverage * 100)}% of what applies to you; a score needs at least ${Math.round(
+            COVERAGE_GATE * 100,
+          )}%.`,
   });
 
   // G-breadth — is it spread across the areas that matter, or one loud corner?
@@ -172,18 +179,33 @@ export function computeScore(results: readonly CheckResult[], input: AuditInput)
   });
 
   // G-freshness — is this a claim about now, or about last month?
-  const stale = contributingObservationAges(results, input).filter(
-    (o) => !Number.isNaN(o.ageDays) && o.ageDays >= FRESHNESS_MAX_DAYS,
-  );
+  //
+  // A timestamp we cannot parse produces a NaN age, and NaN fails every
+  // comparison — so filtering `ageDays >= MAX` silently lets a corrupt
+  // timestamp through as if it were fresh. An age we could not work out is an
+  // UNKNOWN age, and an unknown age can never be evidence that the score is
+  // about today. It fails the gate in its own right, with its own sentence.
+  const ages = contributingObservationAges(results, input);
+  const stale = ages.filter((o) => !Number.isNaN(o.ageDays) && o.ageDays >= FRESHNESS_MAX_DAYS);
+  const undated = ages.filter((o) => Number.isNaN(o.ageDays));
+  const freshnessProblems: string[] = [];
+  if (stale.length > 0) {
+    freshnessProblems.push(
+      `some of it is over a week old (${stale.map((s) => `${s.key}: ${s.ageDays}d`).join(', ')})`,
+    );
+  }
+  if (undated.length > 0) {
+    freshnessProblems.push(
+      `we could not tell how old some of it is (${undated.map((u) => u.key).join(', ')})`,
+    );
+  }
   gates.push({
     id: 'G-freshness',
-    passed: stale.length === 0,
+    passed: freshnessProblems.length === 0,
     detail:
-      stale.length === 0
+      freshnessProblems.length === 0
         ? 'Everything the score rests on was read in the last week.'
-        : `Some of what this rests on is over a week old (${stale
-            .map((s) => `${s.key}: ${s.ageDays}d`)
-            .join(', ')}).`,
+        : `This score rests on readings where ${freshnessProblems.join(', and ')}.`,
   });
 
   const failedGates = gates.filter((g) => !g.passed).map((g) => g.id as GateId);

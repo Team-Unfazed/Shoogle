@@ -26,6 +26,18 @@ import type { AuditArea, GateId } from '../types';
 const gateFailed = (id: GateId, score: ReturnType<typeof computeScore>): boolean =>
   score.failedGates.includes(id);
 
+/**
+ * `overallCoverage` is `number | null` because "nothing applies to this
+ * business" is not "we measured 0% of what applies". Every scenario in this
+ * file has applicable weight, so a null here is a bug in the scorer, not a
+ * shape the assertions should quietly tolerate.
+ */
+function coverageOf(score: ReturnType<typeof computeScore>): number {
+  const coverage = score.overallCoverage;
+  if (coverage === null) throw new Error('expected a coverage ratio, got null');
+  return coverage;
+}
+
 describe('the coverage gate points the right way', () => {
   it('defines coverage as measured-over-applicable, so more knowledge means higher coverage', () => {
     const knowLittle = computeScore(
@@ -34,7 +46,7 @@ describe('the coverage gate points the right way', () => {
     );
     const knowEverything = computeScore(syntheticResults(), syntheticInput());
 
-    expect(knowEverything.overallCoverage).toBeGreaterThan(knowLittle.overallCoverage);
+    expect(coverageOf(knowEverything)).toBeGreaterThan(coverageOf(knowLittle));
     expect(knowEverything.overallCoverage).toBe(1);
     expect(knowLittle.overallCoverage).toBeCloseTo(0.73, 5);
   });
@@ -89,8 +101,8 @@ describe('the coverage gate points the right way', () => {
       const score = computeScore(syntheticResults({ notChecked }), syntheticInput());
 
       // Coverage falls as we measure less. Never the other way round.
-      expect(score.overallCoverage).toBeLessThanOrEqual(previousCoverage);
-      previousCoverage = score.overallCoverage;
+      expect(coverageOf(score)).toBeLessThanOrEqual(previousCoverage);
+      previousCoverage = coverageOf(score);
 
       // And once the gate has closed it never reopens as we measure even less.
       const emitted = score.score !== null;
@@ -192,7 +204,7 @@ describe('the four gates', () => {
   it('G-breadth fails when one heavy area is mostly unknown, even at high overall coverage', () => {
     // Reviews carry 18 points; knowing only 8 of them is 44% of that area.
     const score = computeScore(syntheticResults({ notChecked: { reviews: 10 } }), syntheticInput());
-    expect(score.overallCoverage).toBeGreaterThan(COVERAGE_GATE);
+    expect(coverageOf(score)).toBeGreaterThan(COVERAGE_GATE);
     expect(gateFailed('G-breadth', score)).toBe(true);
     expect(score.gates.find((g) => g.id === 'G-breadth')?.detail).toContain('Reviews');
     expect(score.score).toBeNull();

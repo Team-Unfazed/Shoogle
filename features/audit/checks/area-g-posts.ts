@@ -14,12 +14,16 @@
  * These checks only ever produce a FINDING. Composing or scheduling the post
  * itself belongs to Yash's SocialPublisher, which already targets
  * 'google_business' — two scheduling surfaces would be two sources of truth.
+ * That is exactly why `CAP_GOOGLE_POST` below carries `providerMethod: null`:
+ * the API write exists, the authoring surface is somebody else's, and no
+ * handoff has been agreed. Both checks therefore degrade to `guided` and their
+ * copy tells the owner what THEY do, with no promise of a post Shoogle writes
+ * or schedules.
  */
 
-import type { CheckDefinition } from '../types';
+import type { CheckDefinition, FixCapability } from '../types';
 
 import {
-  CAP_LOCAL_POST,
   daysBetween,
   fail,
   need,
@@ -28,6 +32,23 @@ import {
   pass,
   warn,
 } from './helpers';
+
+/**
+ * The Business Information / legacy v4 API really does create local posts
+ * (matrix §6, STANDARD/EVENT/OFFER/ALERT). Shoogle still cannot offer a one-tap
+ * fix from here: the composer for the `google_business` target belongs to
+ * SocialPublisher and there is no agreed handoff from the audit into it.
+ * `providerMethod: null` is what makes `resolveFixMode` degrade G1/G2 to
+ * `guided`, and the copy below has to match that.
+ */
+const CAP_GOOGLE_POST: FixCapability = {
+  apiSupportsWrite: true,
+  providerMethod: null,
+  matrixNote:
+    'docs/research/google-business-profile.md §6: accounts.locations.localPosts create exists, ' +
+    "but the Google post authoring surface is SocialPublisher's google_business target, owned " +
+    'outside features/audit with no agreed handoff. Guided until there is one.',
+};
 
 const STALE_POST_DAYS = 30;
 const CADENCE_WINDOW_DAYS = 90;
@@ -43,7 +64,7 @@ const G1: CheckDefinition = {
   severity: 'important',
   confidence: 'inferred',
   intendedFixMode: 'assisted',
-  capability: CAP_LOCAL_POST,
+  capability: CAP_GOOGLE_POST,
   sources: ['gbp.legacy', 'gbp.info'],
   needs: ['location', 'localPosts'],
   leadingIndicator: 'BUSINESS_IMPRESSIONS_MOBILE_SEARCH + CALL_CLICKS over 28 days.',
@@ -64,7 +85,8 @@ const G1: CheckDefinition = {
         title: "You've never posted to Google",
         detail:
           'A post keeps your listing looking alive — an offer, a new service, a photo of this ' +
-          "week's work. Shoogle can write one and schedule it for you every week.",
+          "week's work. Posting is done from the Google Business Profile app, and we will show " +
+          'you where to tap.',
         observation: 'localPosts returned 0 posts (a successful call, empty result).',
         evidence: ['Google posts: 0'],
       });
@@ -82,8 +104,8 @@ const G1: CheckDefinition = {
       return warn(0.5, {
         title: `You haven't posted to Google in ${ageDays} days`,
         detail:
-          'A post keeps your listing looking alive. Shoogle can write and schedule one a week for ' +
-          'you — you approve them in a batch.',
+          'A post keeps your listing looking alive. Putting up one short post in the Google ' +
+          'Business Profile app takes a couple of minutes — we will show you where to tap.',
         observation: `Newest local post is ${ageDays} days old.`,
         evidence,
       });
@@ -91,8 +113,8 @@ const G1: CheckDefinition = {
     return fail({
       title: `You haven't posted to Google in ${ageDays} days`,
       detail:
-        'A listing with nothing new on it for months reads as a shop that has gone quiet. Shoogle ' +
-        'can write and schedule one post a week for you.',
+        'A listing with nothing new on it for months reads as a shop that has gone quiet. One ' +
+        'short post in the Google Business Profile app changes that — we will show you where to tap.',
       observation: `Newest local post is ${ageDays} days old.`,
       evidence,
     });
@@ -109,7 +131,7 @@ const G2: CheckDefinition = {
   severity: 'minor',
   confidence: 'inferred',
   intendedFixMode: 'assisted',
-  capability: CAP_LOCAL_POST,
+  capability: CAP_GOOGLE_POST,
   sources: ['gbp.legacy'],
   needs: ['location', 'localPosts'],
   leadingIndicator: 'CALL_CLICKS and WEBSITE_CLICKS over 28 days.',
@@ -147,7 +169,8 @@ const G2: CheckDefinition = {
       title: `Your Google posts: ${problems.join(', and ')}`,
       detail:
         'An offer, a price, or a "Call now" button gives people something to do after they read it. ' +
-        'Shoogle can add one to each post before it goes out.',
+        'The Google Business Profile app lets you add one while you write the post, and we will ' +
+        'show you where to tap.',
       observation: `${recent.length} posts in the last ${CADENCE_WINDOW_DAYS} days, ${withCta} with a call to action.`,
       evidence: [
         `Posts in the last three months: ${recent.length}`,

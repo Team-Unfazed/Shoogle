@@ -13,9 +13,11 @@ import type { CheckDefinition } from '../types';
 import {
   CAP_PATCHABLE_NO_METHOD,
   fail,
+  itemsIfRead,
   need,
   notApplicable,
   pass,
+  readList,
   warn,
 } from './helpers';
 
@@ -51,8 +53,9 @@ const H1: CheckDefinition = {
     return fail({
       title: 'Your listing has no description',
       detail:
-        'This is the paragraph that tells someone why to pick you instead of the next shop. We will ' +
-        'write one from what you have already told us, and you can change any word of it before it goes up.',
+        'This is the paragraph that tells someone why to pick you instead of the next shop. It goes ' +
+        'under Edit profile in the Google Business Profile app, in your own words — we will show ' +
+        'you where to tap.',
       observation: 'profile.description is absent or empty.',
       evidence: ['Description: none'],
     });
@@ -98,9 +101,11 @@ const H2: CheckDefinition = {
     const mentionsLocality = locality.length > 0 && lower.includes(locality.toLowerCase().split(',')[0]?.trim() ?? locality.toLowerCase());
     if (locality.length > 0 && !mentionsLocality) problems.push(`it does not mention ${locality}`);
 
+    // A service list Google never returned is left out entirely rather than
+    // read as "no services", which would change what we accuse the copy of.
     const services = [
       ...owner.declaredServices,
-      ...location.serviceItems.map((s) => s.name),
+      ...(itemsIfRead(location.serviceItems) ?? []).map((s) => s.name),
     ].filter((s) => s.trim().length > 0);
     const mentionsService = services.some((s) => lower.includes(s.toLowerCase()));
     if (services.length > 0 && !mentionsService) problems.push('it does not say what you actually do');
@@ -127,7 +132,8 @@ const H2: CheckDefinition = {
         title: 'Your description breaks one of Google’s rules',
         detail:
           `Your description ${problems[0]}. That usually means it disappears from your listing ` +
-          'entirely. We will rewrite it without that and keep everything else.',
+          'entirely. Taking that bit out is under Edit profile in the Google Business Profile ' +
+          'app — we will show you where to tap.',
         observation: `profile.description contains ${hasUrl ? 'a URL' : ''}${hasUrl && hasPhone ? ' and ' : ''}${hasPhone ? 'a phone number' : ''}.`,
         evidence,
       });
@@ -135,7 +141,9 @@ const H2: CheckDefinition = {
 
     return warn(Math.max(0.2, 1 - 0.25 * problems.length), {
       title: 'Your description could work harder',
-      detail: `Right now ${problems.join(', and ')}. Those are the things people scan for. We can rewrite it and you approve the words.`,
+      detail:
+        `Right now ${problems.join(', and ')}. Those are the things people scan for, and the ` +
+        'description is yours to word — we will show you where to edit it.',
       observation: `profile.description issues: ${problems.join('; ')}.`,
       evidence,
     });
@@ -177,7 +185,12 @@ const H3: CheckDefinition = {
       return notApplicable('Google offers no extra labels for your kind of business.');
     }
 
-    const set = new Set(location.attributeIds);
+    // Which labels are already ticked is the whole measurement here. If Google
+    // never sent them, we cannot say any are missing.
+    const alreadySet = readList(location.attributeIds);
+    if (!alreadySet.ok) return alreadySet.evaluation;
+
+    const set = new Set(alreadySet.items);
     const missing = candidates.filter((id) => !set.has(id));
     if (missing.length === 0) return pass();
 
@@ -187,10 +200,11 @@ const H3: CheckDefinition = {
       title: `You haven't set ${labels.slice(0, 3).join(', ')}`,
       detail:
         'These show up as small labels on your listing and answer questions before anyone has to ' +
-        'call and ask. Tick the ones that are true and we will set them.',
+        'call and ask. They are under Edit profile in the Google Business Profile app — we will ' +
+        'show you where to tap and tick the ones that are true.',
       observation: `${missing.length} of ${candidates.length} available high-value attributes are unset.`,
       evidence: [
-        `Labels set: ${location.attributeIds.length}`,
+        `Labels set: ${alreadySet.items.length}`,
         `Worth adding: ${labels.join(', ')}`,
       ],
     };

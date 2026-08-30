@@ -18,6 +18,7 @@ import type {
   NotCheckedReason,
   ObservationKey,
   ObservationValues,
+  ReadCollection,
 } from '../types';
 
 /* -------------------------------------------------------------------------- */
@@ -108,6 +109,28 @@ export function need<K extends ObservationKey>(ctx: CheckContext, ...keys: K[]):
   return { ok: true, data: data as Needed<K> };
 }
 
+type CollectionResult<T> =
+  | { ok: true; items: readonly T[] }
+  | { ok: false; evaluation: CheckEvaluation };
+
+/**
+ * Unwrap a `ReadCollection`, or hand back a ready-made `not_checked` carrying
+ * the reason Google never gave us the list.
+ *
+ * This is the collection-level twin of `need()`, and it exists for the same
+ * reason: a check must not be able to read "we were never told" as "there are
+ * none". An empty `items` here IS a measurement and a check may fail on it.
+ */
+export function readList<T>(collection: ReadCollection<T>): CollectionResult<T> {
+  if (collection.kind === 'read') return { ok: true, items: collection.items };
+  return { ok: false, evaluation: notChecked(collection.why, collection.detail) };
+}
+
+/** `items` when the list was read, `null` when it was not. For optional evidence. */
+export function itemsIfRead<T>(collection: ReadCollection<T>): readonly T[] | null {
+  return collection.kind === 'read' ? collection.items : null;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Capability presets — every one of these cites the GBP matrix               */
 /* -------------------------------------------------------------------------- */
@@ -147,12 +170,16 @@ export const CAP_REVIEW_REPLY: FixCapability = {
   matrixNote: `${MATRIX} §5: accounts.locations.reviews.updateReply creates or replaces a reply.`,
 };
 
-/** `createLocalPost` exists on the contract; §6 confirms localPosts create. */
-export const CAP_LOCAL_POST: FixCapability = {
-  apiSupportsWrite: true,
-  providerMethod: 'createLocalPost',
-  matrixNote: `${MATRIX} §6: accounts.locations.localPosts create (STANDARD/EVENT/OFFER/ALERT).`,
-};
+/**
+ * There is deliberately NO shared `CAP_LOCAL_POST` here.
+ *
+ * `createLocalPost` does exist on the provider contract, but the surface that
+ * AUTHORS a Google post is `SocialPublisher`'s `google_business` target, which
+ * this feature does not own and has no agreed handoff into. A capability record
+ * naming `createLocalPost` would make G1/G2 `fixableByShoogle` and put a one-tap
+ * button on a composer that does not exist here. Area G declares its own
+ * capability with `providerMethod: null` and says so in the matrix note.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* Small pure utilities                                                       */

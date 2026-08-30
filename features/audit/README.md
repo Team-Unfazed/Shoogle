@@ -82,8 +82,13 @@ test-support/build.ts     test scaffolding (NOT fixtures - different rules)
    carries everything the checks that DID run found, whatever `report` says.
 4. **`fixableByShoogle` requires two separate facts:** the GBP capability matrix
    confirms Google exposes the write, AND `GoogleBusinessProfileProvider`
-   declares a method for it. Today that is true for six checks only; everything
-   else degrades to a guided fix so no dead control ships.
+   declares a method for it. Today that is true for four checks only - D1, D2
+   (hours) and F3, F4 (review replies); everything else degrades to a guided fix
+   so no dead control ships. The COPY has to match: a check whose
+   `capability.providerMethod` is null describes what the OWNER does, in the
+   guided voice ("we will show you where to tap"). Never "tell us and we will
+   set it" - that is a promise with nothing behind it, and
+   `__tests__/no-dead-promises.test.ts` fails the build for it.
 
 ## Known limitations, deliberately visible
 
@@ -96,5 +101,16 @@ test-support/build.ts     test scaffolding (NOT fixtures - different rules)
 - Write methods for categories, description, service items, attributes, special
   hours and media do not exist on the provider contract. That is a PR to
   `lib/providers/contracts.ts` reviewed by Sunny, not an edit from here.
+- G1/G2 are guided even though `localPosts.create` exists and the contract
+  declares `createLocalPost`. The surface that AUTHORS a Google post is
+  `SocialPublisher`'s `google_business` target, owned outside this feature, and
+  no handoff into it has been agreed. A one-tap affordance here would open a
+  composer that does not exist. That is a coordination point, not a code fix.
+- Every collection on `GbpLocationDetail` is a `ReadCollection`, not an array:
+  "Google returned no services" and "Google never sent us the service list"
+  arrive inside the SAME ready location, and only the first may be scored. A
+  check that meets `not_read` returns `not_checked` carrying the reason.
+- `ScoreOutcome.overallCoverage` is `number | null`. Null means no check applied
+  at all, which is not the same statement as "we measured 0% of what applies".
 - `fixHref` defaults to `null`. The engine does not know which routes exist; the
   screen rendering findings passes a resolver in.

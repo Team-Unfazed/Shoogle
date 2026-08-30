@@ -51,22 +51,26 @@ export {
 export {
   describeReplyModeration,
   describeGoogleUpdatedField,
+  replyTimestamp,
+  type ContractReviewProjection,
   type ReviewMapResult,
 } from './mappers';
 
+/**
+ * The daily-metric registry is NOT re-exported here. `LIVE_DAILY_METRICS`,
+ * `LIVE_DAILY_METRIC_ORDER`, `DAILY_METRIC_UNKNOWN`, `isRenderableDailyMetric`
+ * and `dailyMetricLabel` live in `@/features/seo` and are imported from there,
+ * by this feature and by everyone else. One registry, one import path.
+ */
 export {
   formatKeywordImpressions,
-  isRenderableDailyMetric,
-  DAILY_METRIC_LABELS,
-  DAILY_METRIC_UNKNOWN,
-  LIVE_DAILY_METRICS,
   REMOVED_GBP_CAPABILITIES,
   UNSUPPORTED_GBP_CAPABILITIES,
   type GbpDailyPoint,
   type GbpGoogleUpdatedDiff,
   type GbpKeywordImpressions,
+  type GbpKeywordReport,
   type GbpKeywordRow,
-  type GbpLiveDailyMetric,
   type GbpReplyModeration,
   type GbpReviewDetail,
   type GbpReviewPage,

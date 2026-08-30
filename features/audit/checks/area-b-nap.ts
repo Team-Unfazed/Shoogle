@@ -88,7 +88,8 @@ const B1: CheckDefinition = {
       title: 'Your business name is different in different places',
       detail:
         `Google shows "${location.title}", and ${mismatches.join(', and ')}. Customers and Google ` +
-        'both use the name to match you to searches — pick one and we will make them agree.',
+        'both use the name to match you to searches — pick the one on your shopfront and use it ' +
+        'everywhere. We will show you where to change it on Google.',
       observation: `Name mismatch across sources: ${mismatches.join('; ')}.`,
       evidence: [
         `Google: ${location.title}`,
@@ -130,7 +131,8 @@ const B2: CheckDefinition = {
         title: 'Your listing has no address',
         detail:
           'Google has no street address for you, so you will not show up when someone nearby ' +
-          'searches for what you do. Add it and we will put it on your listing.',
+          'searches for what you do. Your address is under Edit profile in the Google Business ' +
+          'Profile app — we will show you where to tap.',
         observation: 'storefrontAddress is absent on a storefront business.',
         evidence: ['storefrontAddress: none'],
       });
@@ -153,7 +155,8 @@ const B2: CheckDefinition = {
       title: `Your address is missing its ${missing.join(' and ')}`,
       detail:
         `Google has your address without the ${missing.join(' and ')}. People searching nearby ` +
-        'may not be shown your shop at all. Give us the missing bit and we will complete it.',
+        'may not be shown your shop at all. We will show you where to fill in the missing part on ' +
+        'Google.',
       observation: `storefrontAddress is missing: ${missing.join(', ')}.`,
       evidence: [
         `Street: ${address.addressLines.join(', ') || 'missing'}`,
@@ -276,7 +279,8 @@ const B4: CheckDefinition = {
         title: 'The phone number on your listing does not look right',
         detail:
           `Google has "${location.primaryPhone}" for you, which is not a working Indian number. ` +
-          'Anyone tapping call gets nothing. Send us the right one and we will correct it.',
+          'Anyone tapping call gets nothing. Your number is under Edit profile in the Google ' +
+          'Business Profile app — we will show you where to tap.',
         observation: `primaryPhone "${location.primaryPhone}" failed Indian number validation.`,
         evidence: [`Primary phone: ${location.primaryPhone}`],
       });
@@ -310,7 +314,8 @@ const B5: CheckDefinition = {
         title: 'Your Google listing has no website link',
         detail:
           'People who want to see your prices, photos or menu before calling have nowhere to go. ' +
-          'If you have a site, we can add the link now.',
+          'If you have a site, the link goes under Edit profile in the Google Business Profile ' +
+          'app — we will show you where to tap.',
         observation: 'websiteUri is absent.',
         evidence: ['Website link: none'],
       });
@@ -392,7 +397,8 @@ const B6: CheckDefinition = {
       title: "You travel to customers but haven't told Google where",
       detail:
         'Add the areas you cover and you will start appearing in searches from those ' +
-        'neighbourhoods. Tell us the areas and we will add them.',
+        'neighbourhoods. They go under Edit profile in the Google Business Profile app — we will ' +
+        'show you where to tap.',
       observation: `serviceArea.businessType is ${businessType} with 0 places listed.`,
       evidence: [`Business type: ${businessType}`, 'Areas listed: 0'],
       // A service-area business with no service area is invisible in the places

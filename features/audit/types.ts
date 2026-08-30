@@ -17,6 +17,7 @@ import type { AuditFinding, GbpReview } from '@/lib/providers/contracts';
 import type { ConnectionInfo } from '@/lib/providers/types';
 import type { DataState, UnavailableReason } from '@/lib/state/DataState';
 import type { Business } from '@/types/domain';
+import type { KeywordImpressions } from '@/features/seo';
 
 /* -------------------------------------------------------------------------- */
 /* Areas and weights (§3.1)                                                   */
@@ -97,6 +98,43 @@ export type CheckOutcome =
   | { kind: 'not_checked'; reason: NotCheckedReason; detail: string };
 
 export type OutcomeKind = CheckOutcome['kind'];
+
+/* -------------------------------------------------------------------------- */
+/* Collections we may or may not have been given (§1.2)                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A list Google may or may not have returned.
+ *
+ * A bare `T[]` cannot tell "Google returned this collection and it was empty"
+ * apart from "Google never returned this collection at all" — the first is a
+ * MEASURED ZERO that earns a finding, the second is an UNKNOWN that must earn
+ * `not_checked`. Both arrive inside the SAME ready `GbpLocationDetail`, because
+ * a field mask, a permission or an API version can drop one collection while
+ * every other field on the location comes back fine. `DataState` cannot express
+ * that: it is a statement about the whole observation, not about one field.
+ *
+ * So every collection on `GbpLocationDetail` is this union, and a check that
+ * meets `not_read` must return `not_checked` carrying `why` — never a fail, and
+ * never a pass.
+ */
+export type ReadCollection<T> =
+  /** Google answered. `items` may legitimately be empty — that is a measurement. */
+  | { kind: 'read'; items: readonly T[] }
+  /** Google did not answer for this field. Nothing here may be scored. */
+  | { kind: 'not_read'; why: NotCheckedReason; detail: string };
+
+/** Constructor for "Google answered". An empty array here is a measured zero. */
+export const readCollection = <T>(items: readonly T[]): ReadCollection<T> => ({
+  kind: 'read',
+  items,
+});
+
+/** Constructor for "Google never gave us this list", carrying the reason why. */
+export const unreadCollection = <T>(
+  why: NotCheckedReason,
+  detail: string,
+): ReadCollection<T> => ({ kind: 'not_read', why, detail });
 
 /* -------------------------------------------------------------------------- */
 /* Findings (§1.1)                                                            */
@@ -260,10 +298,16 @@ export interface GbpMoreHoursObservation {
  * Sunny's and stays untouched. `features/gbp/` maps the API response into this;
  * the engine never sees an HTTP response.
  *
- * Every field that Google may legitimately omit is `| null`, and null means
- * "Google returned this location and this field was absent" — a MEASURED
+ * Every SCALAR field that Google may legitimately omit is `| null`, and null
+ * means "Google returned this location and this field was absent" — a MEASURED
  * absence. A field we could not read at all is expressed by the whole
  * observation being `unavailable`, not by a null in here.
+ *
+ * Every COLLECTION is a `ReadCollection`, because `null` is not available to an
+ * array and `[]` would collapse "Google returned no services" into "Google
+ * never told us about services". Those are different facts with different
+ * outcomes: the first is a fail the owner can act on, the second is
+ * `not_checked`.
  */
 export interface GbpLocationDetail {
   locationId: string;
@@ -275,14 +319,14 @@ export interface GbpLocationDetail {
   primaryPhone: string | null;
   websiteUri: string | null;
   primaryCategory: GbpCategoryRef | null;
-  additionalCategories: GbpCategoryRef[];
-  serviceItems: GbpServiceItemObservation[];
-  regularHourPeriods: GbpTimePeriodObservation[];
-  specialHourPeriods: GbpSpecialHourPeriodObservation[];
-  moreHours: GbpMoreHoursObservation[];
+  additionalCategories: ReadCollection<GbpCategoryRef>;
+  serviceItems: ReadCollection<GbpServiceItemObservation>;
+  regularHourPeriods: ReadCollection<GbpTimePeriodObservation>;
+  specialHourPeriods: ReadCollection<GbpSpecialHourPeriodObservation>;
+  moreHours: ReadCollection<GbpMoreHoursObservation>;
   serviceArea: { businessType: GbpBusinessType; placeCount: number } | null;
   profileDescription: string | null;
-  attributeIds: string[];
+  attributeIds: ReadCollection<string>;
   openInfo: { status: 'OPEN' | 'CLOSED_TEMPORARILY' | 'CLOSED_PERMANENTLY' } | null;
   metadata: {
     hasVoiceOfMerchant: boolean;
@@ -386,19 +430,18 @@ export interface AttributeCatalogObservation {
  * Rendering a threshold as a number fabricates data; rendering it as 0 breaks
  * "unknown is not zero" twice. Use `formatKeywordImpressions`.
  */
-export type AuditKeywordImpressions =
-  | { kind: 'exact'; uniqueUsers: number }
-  | { kind: 'below_threshold'; threshold: number };
+export type AuditKeywordImpressions = KeywordImpressions;
 
 export interface KeywordEvidenceObservation {
   keyword: string;
   impressions: AuditKeywordImpressions;
 }
 
-/** Renders "<15" for a threshold. Never "15", never "0". */
-export function formatKeywordImpressions(i: AuditKeywordImpressions): string {
-  return i.kind === 'exact' ? String(i.uniqueUsers) : `<${i.threshold}`;
-}
+/**
+ * Re-exported from `features/seo`, the single owner. A second implementation
+ * here rendered 1240 where seo's rendered 1,240.
+ */
+export { formatKeywordImpressions } from '@/features/seo';
 
 export type IndiaStateCode =
   | 'MH'
@@ -595,8 +638,15 @@ export interface GateResult {
 export interface ScoreOutcome {
   /** 0-100, or null when any gate failed. Never a number derived from absence. */
   score: number | null;
-  /** Sum of earnable / sum of applicable across all areas. 0 when nothing applied. */
-  overallCoverage: number;
+  /**
+   * Sum of earnable / sum of applicable across all areas.
+   *
+   * `null` — never 0 — when no check applies to this business at all. A 0 there
+   * would read as "we measured nothing of what applies to you", which is a
+   * statement about our coverage; the truth is that there was nothing to cover.
+   * The G-coverage gate fails either way, but it must say the right sentence.
+   */
+  overallCoverage: number | null;
   totalApplicableWeight: number;
   totalEarnableWeight: number;
   totalEarnedWeight: number;

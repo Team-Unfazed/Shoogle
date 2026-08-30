@@ -6,6 +6,7 @@ import {
   type GbpSession,
   type GbpTransport,
 } from '@/features/gbp/provider';
+import { LIVE_DAILY_METRICS } from '@/features/seo';
 import { fixtureVoiceOfMerchantStates } from '@/fixtures/gbp';
 import { isProviderRegistered } from '@/lib/providers/registry';
 import type { DataState } from '@/lib/state/DataState';
@@ -197,7 +198,10 @@ describe('Voice of Merchant gates reviews', () => {
 
   it('reports each blocked state with its own reason code', async () => {
     const cases = [
-      ['wait', 'no_data_yet'],
+      // NOT 'no_data_yet' — that renders as "Nothing yet / There is no activity
+      // to report", which would tell an owner their business is empty when the
+      // truth is that Google has not finished verifying them.
+      ['wait', 'insufficient_data'],
       ['ownership_conflict', 'not_supported'],
       ['suspended', 'not_supported'],
       ['silent', 'insufficient_data'],
@@ -364,9 +368,12 @@ describe('performance', () => {
     const state = await provider.getPerformanceReport('loc-1', '7d');
     if (state.status !== 'ready') throw new Error('expected ready');
     const keys = state.value.metrics.map((metric) => metric.key);
-    expect(keys).toContain('call_clicks');
-    expect(keys).not.toContain('business_bookings');
-    expect(state.value.metrics.find((metric) => metric.key === 'call_clicks')?.value).toBe(0);
+    expect(keys).toContain(LIVE_DAILY_METRICS.CALL_CLICKS.key);
+    expect(keys).not.toContain(LIVE_DAILY_METRICS.BUSINESS_BOOKINGS.key);
+    expect(
+      state.value.metrics.find((metric) => metric.key === LIVE_DAILY_METRICS.CALL_CLICKS.key)
+        ?.value,
+    ).toBe(0);
     expect(state.value.unreported).toContain('BUSINESS_BOOKINGS');
   });
 
@@ -377,7 +384,9 @@ describe('performance', () => {
     const state = await provider.getPerformance('loc-1', '7d');
     if (state.status !== 'ready') throw new Error('expected ready');
     expect(state.value).toHaveLength(1);
-    expect(state.value.every((metric) => metric.key === 'call_clicks')).toBe(true);
+    expect(
+      state.value.every((metric) => metric.key === LIVE_DAILY_METRICS.CALL_CLICKS.key),
+    ).toBe(true);
   });
 
   it('reports "nothing published" rather than an empty grid of zeros', async () => {

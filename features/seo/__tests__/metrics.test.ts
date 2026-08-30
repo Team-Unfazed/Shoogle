@@ -24,6 +24,8 @@ import {
   toMetrics,
   type DailyMetricSample,
 } from '../metrics';
+import * as metricsModule from '../metrics';
+import * as seoBarrel from '../index';
 import { DAILY_METRIC_UNKNOWN, type RemovedMetricId } from '../types';
 
 describe('the surviving DailyMetric set', () => {
@@ -174,5 +176,116 @@ describe('metrics that were renamed rather than deleted', () => {
       'BUSINESS_IMPRESSIONS_MOBILE_MAPS',
     ]);
     expect(renamedMetricFor('NOPE')).toBeNull();
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* REGRESSION: the sentinel must not be reachable from anything renderable    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `DAILY_METRIC_UNKNOWN` is the `DailyMetric` enum's default member: Google had
+ * nothing to say. It is not a metric and it is not a zero, so it must not
+ * appear in any registry, any display order, any label, any `Metric[]` or any
+ * owner-facing string.
+ *
+ * The tests above check the helpers one at a time. These walk EVERY export of
+ * the module and of the public barrel instead, so a registry added later is
+ * covered without anyone remembering to come back here.
+ */
+
+/** Every string reachable inside a value, however deeply nested. */
+function reachableStrings(value: unknown, seen: Set<object> = new Set()): string[] {
+  if (typeof value === 'string') return [value];
+  if (typeof value !== 'object' || value === null) return [];
+  if (seen.has(value)) return [];
+  seen.add(value);
+  const out: string[] = [];
+  if (Array.isArray(value)) {
+    for (const entry of value) out.push(...reachableStrings(entry, seen));
+    return out;
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    out.push(key);
+    out.push(...reachableStrings(entry, seen));
+  }
+  return out;
+}
+
+function mentionsSentinel(value: unknown): boolean {
+  return reachableStrings(value).some((text) => text.includes(DAILY_METRIC_UNKNOWN));
+}
+
+describe('DAILY_METRIC_UNKNOWN is absent from everything renderable', () => {
+  it('reachableStrings actually looks inside keys, values and nesting', () => {
+    // Guards the guard: a walker that silently found nothing would make every
+    // assertion below pass for the wrong reason.
+    expect(mentionsSentinel({ a: [{ b: DAILY_METRIC_UNKNOWN }] })).toBe(true);
+    expect(mentionsSentinel({ [DAILY_METRIC_UNKNOWN]: 1 })).toBe(true);
+    expect(mentionsSentinel([`prefix ${DAILY_METRIC_UNKNOWN} suffix`])).toBe(true);
+    expect(mentionsSentinel({ a: ['CALL_CLICKS'], b: null, c: 3 })).toBe(false);
+  });
+
+  it('appears in no registry, list or definition exported by ../metrics', () => {
+    const offenders: string[] = [];
+    for (const [name, exported] of Object.entries(metricsModule)) {
+      if (typeof exported === 'function') continue;
+      if (mentionsSentinel(exported)) offenders.push(name);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('appears in exactly one export of the public barrel: the constant itself', () => {
+    const offenders: string[] = [];
+    for (const [name, exported] of Object.entries(seoBarrel)) {
+      if (typeof exported === 'function') continue;
+      if (name === 'DAILY_METRIC_UNKNOWN') continue;
+      if (mentionsSentinel(exported)) offenders.push(name);
+    }
+    expect(offenders).toEqual([]);
+    expect(seoBarrel.DAILY_METRIC_UNKNOWN).toBe(DAILY_METRIC_UNKNOWN);
+  });
+
+  it('is rejected by every exported predicate and lookup', () => {
+    expect(isLiveDailyMetric(DAILY_METRIC_UNKNOWN)).toBe(false);
+    expect(isRenderableDailyMetric(DAILY_METRIC_UNKNOWN)).toBe(false);
+    expect(isRemovedMetric(DAILY_METRIC_UNKNOWN)).toBe(false);
+    expect(dailyMetricLabel(DAILY_METRIC_UNKNOWN)).toBeNull();
+    expect(removedMetricStateFor(DAILY_METRIC_UNKNOWN)).toBeNull();
+    expect(renamedMetricFor(DAILY_METRIC_UNKNOWN)).toBeNull();
+  });
+
+  it('never reaches a Metric[], even alongside metrics that do render', () => {
+    const samples: DailyMetricSample[] = [
+      ...LIVE_DAILY_METRIC_ORDER.map((metric) => ({
+        metric,
+        total: 3,
+        period: 'last 28 days',
+      })),
+      { metric: DAILY_METRIC_UNKNOWN, total: 999, period: 'last 28 days' },
+      { metric: DAILY_METRIC_UNKNOWN, total: null, period: 'last 28 days' },
+    ];
+
+    const metrics = toMetrics(samples);
+
+    expect(metrics).toHaveLength(LIVE_DAILY_METRIC_ORDER.length);
+    expect(mentionsSentinel(metrics)).toBe(false);
+    // ...and it is not smuggled in as a "we could not read this" label either.
+    expect(mentionsSentinel(omittedDailyMetrics(samples))).toBe(false);
+    expect(omittedDailyMetrics(samples)).toEqual([]);
+  });
+
+  it('cannot be labelled through any live or removed registry entry', () => {
+    const everyKnownId = [
+      ...Object.keys(LIVE_DAILY_METRICS),
+      ...REMOVED_METRIC_IDS,
+      ...RENAMED_METRICS.map((entry) => entry.legacyId),
+      DAILY_METRIC_UNKNOWN,
+    ];
+    for (const id of everyKnownId) {
+      const label = dailyMetricLabel(id);
+      if (label !== null) expect(label).not.toContain(DAILY_METRIC_UNKNOWN);
+    }
+    expect(dailyMetricLabel(DAILY_METRIC_UNKNOWN)).toBeNull();
   });
 });

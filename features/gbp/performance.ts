@@ -21,20 +21,19 @@
  * nobody reads it as a complete figure.
  */
 
+import { LIVE_DAILY_METRICS, isRenderableDailyMetric, type LiveDailyMetric } from '@/features/seo';
 import type { Metric } from '@/lib/providers/types';
 
 import type { DailyRange } from './endpoints';
-import {
-  DAILY_METRIC_LABELS,
-  isRenderableDailyMetric,
-  type GbpDailyPoint,
-  type GbpDatedValueWire,
-  type GbpFetchMultiDailyMetricsResponse,
-  type GbpKeywordRow,
-  type GbpLiveDailyMetric,
-  type GbpMetricTotal,
-  type GbpSearchKeywordCountWire,
-  type GoogleDate,
+import type {
+  GbpDailyPoint,
+  GbpDatedValueWire,
+  GbpFetchMultiDailyMetricsResponse,
+  GbpKeywordReport,
+  GbpKeywordRow,
+  GbpMetricTotal,
+  GbpSearchKeywordCountWire,
+  GoogleDate,
 } from './types';
 
 /* -------------------------------------------------------------------------- */
@@ -191,7 +190,7 @@ export function changePercent(current: GbpMetricTotal, previous: GbpMetricTotal)
 }
 
 export interface GbpSeries {
-  metric: GbpLiveDailyMetric;
+  metric: LiveDailyMetric;
   points: GbpDailyPoint[];
 }
 
@@ -225,9 +224,9 @@ export function buildMetrics(
   response: GbpFetchMultiDailyMetricsResponse,
   windows: GbpWindows,
   periodLabel: string,
-): { metrics: Metric[]; omitted: GbpLiveDailyMetric[] } {
+): { metrics: Metric[]; omitted: LiveDailyMetric[] } {
   const metrics: Metric[] = [];
-  const omitted: GbpLiveDailyMetric[] = [];
+  const omitted: LiveDailyMetric[] = [];
 
   for (const { metric, points } of extractSeries(response)) {
     const current = totalOver(points, windows.current);
@@ -239,9 +238,10 @@ export function buildMetrics(
     const previous = totalOver(points, windows.previous);
     const complete = current.reportedDays === current.totalDays;
 
+    const definition = LIVE_DAILY_METRICS[metric];
     metrics.push({
-      key: metric.toLowerCase(),
-      label: DAILY_METRIC_LABELS[metric],
+      key: definition.key,
+      label: definition.label,
       value: current.total,
       unit: 'count',
       period: complete
@@ -262,11 +262,11 @@ export function buildMetrics(
  * still has to name them, or the owner sees a short grid with no explanation.
  */
 export function missingMetrics(
-  requested: readonly GbpLiveDailyMetric[],
+  requested: readonly LiveDailyMetric[],
   produced: readonly Metric[],
-): GbpLiveDailyMetric[] {
+): LiveDailyMetric[] {
   const present = new Set(produced.map((metric) => metric.key));
-  return requested.filter((metric) => !present.has(metric.toLowerCase()));
+  return requested.filter((metric) => !present.has(LIVE_DAILY_METRICS[metric].key));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -286,7 +286,7 @@ export function normaliseKeywordRow(row: GbpSearchKeywordCountWire): GbpKeywordR
 
   const exact = parseCount(row.insightsValue?.value);
   if (exact !== null) {
-    return { keyword, impressions: { kind: 'exact', uniqueUsers: exact } };
+    return { keyword, impressions: { kind: 'exact', value: exact } };
   }
 
   const threshold = parseCount(row.insightsValue?.threshold);
@@ -297,13 +297,24 @@ export function normaliseKeywordRow(row: GbpSearchKeywordCountWire): GbpKeywordR
   return null;
 }
 
+/**
+ * Normalise every row, and COUNT the ones we had to refuse.
+ *
+ * The count is the whole point. An earlier version filtered the nulls away and
+ * returned a bare array, so a response in which every row was unmappable came
+ * back as `[]` — which reads to an owner as "you have no search keywords" when
+ * the truth is "Google sent keywords Shoogle could not read". `skipped` lets
+ * the caller refuse outright, and lets a partial list be labelled as partial.
+ */
 export function normaliseKeywordRows(
   rows: readonly GbpSearchKeywordCountWire[] | undefined,
-): GbpKeywordRow[] {
+): GbpKeywordReport {
   const out: GbpKeywordRow[] = [];
+  let skipped = 0;
   for (const row of rows ?? []) {
     const normalised = normaliseKeywordRow(row);
-    if (normalised !== null) out.push(normalised);
+    if (normalised === null) skipped += 1;
+    else out.push(normalised);
   }
-  return out;
+  return { rows: out, skipped };
 }

@@ -108,7 +108,7 @@ const E2: CheckDefinition = {
         title: "You haven't added any photos",
         detail:
           'Listings with a shopfront photo, a few shots from inside, and pictures of your work get ' +
-          'looked at far longer than ones without. We can turn your recent posts into listing photos.',
+          'looked at far longer than ones without. We will show you where to add them from your phone.',
         observation: 'media.list returned 0 owner-uploaded items.',
         evidence: ['Photos you have added: 0'],
       });
@@ -125,9 +125,9 @@ const E2: CheckDefinition = {
       detail:
         missingBuckets.length > 0
           ? `You have nothing showing ${missingBuckets.join(', ')}. Those are the shots people look ` +
-            'at longest before deciding. We can turn your recent posts into listing photos.'
-          : 'A few more photos gives people more to look at before they decide. We can turn your ' +
-            'recent posts into listing photos.',
+            'at longest before deciding. We will show you where to add them from your phone.'
+          : 'A few more photos gives people more to look at before they decide. We will show you ' +
+            'where to add them from your phone.',
       observation: `${total} owner-uploaded photos covering ${covered} of ${PHOTO_BUCKETS.length} kinds.`,
       evidence: [
         `Photos you have added: ${total}`,

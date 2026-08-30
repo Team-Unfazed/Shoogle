@@ -17,44 +17,19 @@
  */
 
 import type { UnavailableReason } from '@/lib/state/DataState';
+import type { KeywordImpressionRow } from './keywords';
 
 /* -------------------------------------------------------------------------- */
 /* Search-keyword impressions — the threshold union                           */
 /* -------------------------------------------------------------------------- */
 
 /**
- * What `locations.searchkeywords.impressions.monthly.list` actually returns per
- * keyword. `SearchKeywordCount.insightsValue` is a union in the API itself:
- * either `value` (an exact count of unique users) or `threshold` ("a threshold
- * that indicates that the actual value is below this threshold").
- *
- * <https://developers.google.com/my-business/reference/performance/rest/v1/locations.searchkeywords.impressions.monthly/list>
- *
- * Most keywords for a neighbourhood business come back as a threshold. Render a
- * threshold as a number and you have fabricated data; render it as `0` and you
- * have broken "unknown is not zero" twice. Hence the union — never a bare
- * `number`.
+ * The threshold union and its row live in `./keywords`, next to the one
+ * formatter allowed to render them, and are re-exported here so the older
+ * import path keeps resolving to the SAME symbols. There is exactly one
+ * declaration of each in the repository — see the header of `./keywords`.
  */
-export type KeywordImpressions =
-  | {
-      readonly kind: 'exact';
-      /** Unique users who searched this term in the month. May legitimately be 0. */
-      readonly value: number;
-    }
-  | {
-      readonly kind: 'below_threshold';
-      /** The actual count is strictly BELOW this. It is not the count. */
-      readonly threshold: number;
-    };
-
-/** One month's impressions for one keyword, as the API groups them. */
-export interface KeywordImpressionRow {
-  /** Google lowercases search keywords; we keep them as returned. */
-  readonly keyword: string;
-  /** First day of the month the count covers, as `YYYY-MM-01`. */
-  readonly monthStart: string;
-  readonly impressions: KeywordImpressions;
-}
+export type { KeywordImpressionRow, KeywordImpressions, RawInsightsValue } from './keywords';
 
 /**
  * A month of search terms for one location.
@@ -68,16 +43,6 @@ export interface SearchKeywordsReport {
   readonly monthStart: string;
   readonly rows: readonly KeywordImpressionRow[];
   readonly partial: boolean;
-}
-
-/**
- * The raw `insightsValue` shape as it arrives on the wire. Both members are
- * strings in the JSON (int64 fields are serialised as strings), and exactly one
- * of them is present.
- */
-export interface RawInsightsValue {
-  readonly value?: string | number | null;
-  readonly threshold?: string | number | null;
 }
 
 /* -------------------------------------------------------------------------- */

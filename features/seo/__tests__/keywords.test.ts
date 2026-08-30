@@ -15,7 +15,10 @@ import {
   isBelowThreshold,
   parseInsightsValue,
 } from '../keywords';
-import type { KeywordImpressionRow } from '../types';
+import * as keywordsModule from '../keywords';
+import * as seoBarrel from '../index';
+import type { KeywordImpressions as CanonicalKeywordImpressions } from '../keywords';
+import type { KeywordImpressionRow, KeywordImpressions } from '../types';
 
 const row = (
   keyword: string,
@@ -145,5 +148,60 @@ describe('ordering and counting', () => {
   it('identifies a bound', () => {
     expect(isBelowThreshold({ kind: 'below_threshold', threshold: 15 })).toBe(true);
     expect(isBelowThreshold({ kind: 'exact', value: 0 })).toBe(false);
+  });
+});
+
+/**
+ * REGRESSION: three same-named `formatKeywordImpressions` functions once lived
+ * in three barrels a single screen imports together — here, in
+ * `features/gbp/types.ts` and in `features/audit/types.ts` — over unions whose
+ * exact member was spelled differently (`value` vs `uniqueUsers`) and which
+ * rendered differently (`1240` vs `1,240`). Whichever one a file happened to
+ * name won, so the same reading could print two ways on one page.
+ *
+ * `features/seo/keywords.ts` is the owner. These tests pin the single
+ * definition and the single rendering that everything else must import.
+ */
+describe('one canonical definition of keyword impressions', () => {
+  it('is the same function object however it is imported', () => {
+    expect(seoBarrel.formatKeywordImpressions).toBe(keywordsModule.formatKeywordImpressions);
+    expect(seoBarrel.describeKeywordImpressions).toBe(keywordsModule.describeKeywordImpressions);
+    expect(seoBarrel.exactImpressions).toBe(keywordsModule.exactImpressions);
+    expect(seoBarrel.belowThresholdImpressions).toBe(keywordsModule.belowThresholdImpressions);
+    expect(seoBarrel.parseInsightsValue).toBe(keywordsModule.parseInsightsValue);
+  });
+
+  it('resolves to the same TYPE from `../keywords` and from `../types`', () => {
+    // A divergence between the two import paths is a compile error, not a
+    // runtime one: the assignment below stops type-checking the moment the
+    // re-export in `../types` stops pointing at the declaration in
+    // `../keywords`.
+    const canonical: CanonicalKeywordImpressions = { kind: 'exact', value: 3 };
+    const viaTypesBarrel: KeywordImpressions = canonical;
+    expect(formatKeywordImpressions(viaTypesBarrel)).toBe('3');
+  });
+
+  it('spells the exact member `value`, and only `value`', () => {
+    const exact = exactImpressions(240);
+    expect(exact).toEqual({ kind: 'exact', value: 240 });
+    expect(Object.keys(exact ?? {}).sort()).toEqual(['kind', 'value']);
+    expect(Object.prototype.hasOwnProperty.call(exact ?? {}, 'uniqueUsers')).toBe(false);
+  });
+
+  it('renders with thousands grouping, unlike the ad-hoc copies it replaces', () => {
+    // The copies did `String(uniqueUsers)` and `` `<${threshold}` ``, so they
+    // produced '1240' and '<1500'. Grouping is the canonical rendering.
+    expect(formatKeywordImpressions({ kind: 'exact', value: 1240 })).toBe('1,240');
+    expect(formatKeywordImpressions({ kind: 'exact', value: 1240 })).not.toBe('1240');
+    expect(formatKeywordImpressions({ kind: 'below_threshold', threshold: 1500 })).toBe('<1,500');
+    expect(formatKeywordImpressions({ kind: 'below_threshold', threshold: 1500 })).not.toBe('<1500');
+  });
+
+  it('exports the caption helper alongside the formatter, so no caller writes its own', () => {
+    expect(typeof seoBarrel.describeKeywordImpressions).toBe('function');
+    expect(typeof seoBarrel.isBelowThreshold).toBe('function');
+    expect(typeof seoBarrel.groupThousands).toBe('function');
+    expect(typeof seoBarrel.compareKeywordRows).toBe('function');
+    expect(typeof seoBarrel.countBelowThreshold).toBe('function');
   });
 });

@@ -183,7 +183,12 @@ export function classifyReply(reply: GbpReviewReplyWire | undefined): GbpReplyMo
   if (typeof reply.state === 'string' && reply.state.length > 0) {
     const meaning = REVIEW_REPLY_STATE_MEANINGS[reply.state];
     if (meaning === 'published') {
-      return { kind: 'published', updateTime: submittedAt ?? '' };
+      // REFUSE rather than invent. `published` carries a real timestamp; if
+      // Google said "live" but sent no `updateTime` we do not know when, and
+      // `''` is not a time — it is a lie shaped like one.
+      return submittedAt === null
+        ? { kind: 'published_time_unknown' }
+        : { kind: 'published', updateTime: submittedAt };
     }
     if (meaning === 'pending_moderation') return { kind: 'pending_moderation', submittedAt };
     if (meaning === 'rejected') return { kind: 'rejected', reason: null, helpUri: null };
@@ -200,6 +205,8 @@ export function describeReplyModeration(moderation: GbpReplyModeration): string 
       return 'No reply yet';
     case 'published':
       return 'Reply is live on Google';
+    case 'published_time_unknown':
+      return 'Reply is live on Google — Google did not say when';
     case 'pending_moderation':
       return 'Reply submitted — Google is reviewing it';
     case 'rejected':
@@ -259,35 +266,80 @@ export function toReviewDetail(wire: GbpReviewWire): ReviewMapResult {
 }
 
 /**
- * Lossy projection onto the shared `GbpReview` contract.
+ * The moment Google actually attached to a reply, or null.
  *
- * Two things do not survive and both are recorded as blockers:
- *   - `starRating` is `1|2|3|4|5`, so a rating-only review Google marked
- *     `STAR_RATING_UNSPECIFIED` cannot be represented and is dropped.
- *   - `reply` is `{comment, updateTime} | null`, so moderation state is lost.
- *     We still populate it whenever a reply exists, because "a reply exists" is
- *     true whether or not Google has published it — reporting null there would
- *     invite the owner to reply twice. The moderation state stays available on
- *     `GbpReviewDetail`.
+ * Null is a real answer: Google returned a reply and never timestamped it. It
+ * is NOT an invitation to substitute the review's own `updateTime`, `now()`, or
+ * an empty string — none of those is when the reply happened.
  */
-export function toContractReview(detail: GbpReviewDetail): GbpReview | null {
-  if (detail.starRating === null) return null;
+export function replyTimestamp(moderation: GbpReplyModeration): string | null {
+  switch (moderation.kind) {
+    case 'published':
+      return moderation.updateTime;
+    case 'pending_moderation':
+    case 'state_not_understood':
+    case 'state_not_reported':
+      return moderation.submittedAt;
+    case 'published_time_unknown':
+    case 'rejected':
+    case 'no_reply':
+      return null;
+  }
+}
+
+/**
+ * Lossy projection onto the shared `GbpReview` contract, with the losses named.
+ *
+ * Three things do not survive, and each is REPORTED rather than papered over:
+ *   - `starRating` is `1|2|3|4|5`, so a review Google marked
+ *     `STAR_RATING_UNSPECIFIED` cannot be represented at all → `ok: false`.
+ *   - `reply.updateTime` is a required `string`. A reply Google never
+ *     timestamped therefore cannot be expressed, so `reply` is `null` and
+ *     `replyOmitted` is true. The previous version filled the field with the
+ *     REVIEW's timestamp (or `''`), which invented a moment that never
+ *     happened — and did it on every reply, since no reply is confirmed
+ *     published today.
+ *   - moderation state has nowhere to go in the shared shape. The truth stays
+ *     on `GbpReviewDetail.replyModeration`; callers that need it must use
+ *     `listReviewsDetailed`, not this projection.
+ */
+export type ContractReviewProjection =
+  | {
+      ok: true;
+      review: GbpReview;
+      /**
+       * True when the review HAS a reply that the shared shape could not carry.
+       * A caller that ignores this shows "no reply yet" on a review the owner
+       * has already answered — and invites them to answer twice.
+       */
+      replyOmitted: boolean;
+    }
+  | { ok: false; reason: string };
+
+export function toContractReview(detail: GbpReviewDetail): ContractReviewProjection {
+  if (detail.starRating === null) {
+    return {
+      ok: false,
+      reason: 'Google did not report a star rating for this review.',
+    };
+  }
+
+  const comment = detail.replyComment;
+  const timestamp = replyTimestamp(detail.replyModeration);
+  const reply: GbpReview['reply'] =
+    comment !== null && timestamp !== null ? { comment, updateTime: timestamp } : null;
+
   return {
-    reviewId: detail.reviewId,
-    authorDisplayName: detail.authorDisplayName,
-    starRating: detail.starRating,
-    comment: detail.comment,
-    createTime: detail.createTime,
-    reply:
-      detail.replyComment === null
-        ? null
-        : {
-            comment: detail.replyComment,
-            updateTime:
-              detail.replyModeration.kind === 'published'
-                ? detail.replyModeration.updateTime
-                : (detail.updateTime ?? detail.createTime),
-          },
+    ok: true,
+    replyOmitted: comment !== null && timestamp === null,
+    review: {
+      reviewId: detail.reviewId,
+      authorDisplayName: detail.authorDisplayName,
+      starRating: detail.starRating,
+      comment: detail.comment,
+      createTime: detail.createTime,
+      reply,
+    },
   };
 }
 

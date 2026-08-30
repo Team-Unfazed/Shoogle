@@ -243,7 +243,7 @@ export const fixturePerformanceResponse: GbpFetchMultiDailyMetricsResponse = {
  * for. The second renders "<15" — never 15, never 0.
  */
 export const fixtureKeywordRows: GbpKeywordRow[] = [
-  { keyword: '[fixture] example salon near me', impressions: { kind: 'exact', uniqueUsers: 42 } },
+  { keyword: '[fixture] example salon near me', impressions: { kind: 'exact', value: 42 } },
   { keyword: '[fixture] example haircut price', impressions: { kind: 'below_threshold', threshold: 15 } },
 ];
 

@@ -42,10 +42,18 @@
  * comment, so the refusal is executable:
  *
  *   a. the request's `classification` must be `'fixture'`, and
- *   b. the rendered prompt must actually contain the `[FIXTURE]` marker.
+ *   b. `request.input.payload` — the classified material itself — must actually
+ *      contain the `[FIXTURE]` marker.
  *
  * (b) is what makes (a) more than a promise: mislabelling a real business's
  * data as `fixture` still fails, because real data does not carry the marker.
+ *
+ * (b) is checked against the PAYLOAD ONLY, never against the rendered prompt.
+ * The instruction is written by us and carries no classification, so a marker
+ * appearing there says nothing about the data. Checking the rendered prompt
+ * would mean any instruction that happened to contain the marker — a prompt
+ * that quotes this rule, for instance — waved a real business's payload
+ * through. Do not "simplify" this back to the concatenated string.
  *
  * ## 4. Production needs a server-side proxy that does not exist
  *
@@ -102,8 +110,8 @@ export const REFUSAL_NOT_FIXTURE_DATA =
   'server-side proxy, which is not built yet.';
 
 export const REFUSAL_MISSING_MARKER =
-  `This request is labelled as fixture data but does not contain the ${FIXTURE_MARKER} marker, so ` +
-  'it cannot be confirmed as safe to send. Refusing.';
+  `This request is labelled as fixture data but its data does not carry the ${FIXTURE_MARKER} ` +
+  'marker, so it cannot be confirmed as safe to send. Refusing.';
 
 export const REFUSAL_PUBLIC_KEY =
   `${FORBIDDEN_PUBLIC_KEY_VARIABLE} is defined. Anything with that prefix is compiled into the app ` +
@@ -183,6 +191,15 @@ export function defaultGeminiRuntime(): GeminiRuntime {
 /* Guards                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The exact string that will be sent to the model.
+ *
+ * FOR SENDING AND FOR MEASURING SIZE ONLY. No safety guard may be evaluated
+ * against this string: it mixes our instruction (unclassified) with the
+ * caller's payload (classified), so any check against it can be satisfied by
+ * the half that carries no data. Classification guards read
+ * `request.input` directly.
+ */
 function renderPrompt(request: AiTextRequest): string {
   return `${request.instruction}\n\n---\n\n${request.input.payload}`;
 }
@@ -266,13 +283,23 @@ export function createGeminiAiProvider(overrides: Partial<GeminiRuntime> = {}): 
         return unavailable('not_supported', REFUSAL_NOT_FIXTURE_DATA);
       }
 
-      /* Guard 6: and the content must actually look like fixture data. A
-         declaration alone is a promise; this checks it. */
-      const prompt = renderPrompt(request);
-      if (!prompt.includes(FIXTURE_MARKER)) {
+      /* Guard 6: and the DATA must actually look like fixture data. A
+         declaration alone is a promise; this checks it.
+
+         Checked against `request.input.payload` — the material the
+         classification covers — and deliberately NOT against the rendered
+         prompt. The instruction is ours and is not classified data, so a
+         marker in it proves nothing; checking the concatenation would let any
+         instruction carrying the marker escort a real business's payload to a
+         free-tier endpoint. An empty payload also fails here, which is
+         correct: nothing to confirm means nothing to send. */
+      if (!request.input.payload.includes(FIXTURE_MARKER)) {
         return unavailable('not_supported', REFUSAL_MISSING_MARKER);
       }
 
+      /* The size cap is measured on the rendered prompt because the rendered
+         prompt is what actually leaves the device. */
+      const prompt = renderPrompt(request);
       if (prompt.length > MAX_PROMPT_CHARS) {
         return unavailable(
           'not_supported',

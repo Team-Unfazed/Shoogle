@@ -23,6 +23,7 @@ import {
   notApplicable,
   notChecked,
   pass,
+  readList,
   warn,
 } from './helpers';
 
@@ -84,7 +85,12 @@ const D1: CheckDefinition = {
     if (!got.ok) return got.evaluation;
     const { location } = got.data;
 
-    const days = minutesPerDay(location.regularHourPeriods);
+    // Hours Google never sent us are not hours the owner never set. Only a list
+    // Google actually returned can be reported as empty.
+    const periods = readList(location.regularHourPeriods);
+    if (!periods.ok) return periods.evaluation;
+
+    const days = minutesPerDay(periods.items);
     if (days.size === 0) {
       return fail({
         title: 'Your opening hours are missing',
@@ -121,12 +127,15 @@ const D2: CheckDefinition = {
     if (!got.ok) return got.evaluation;
     const { location, owner } = got.data;
 
-    const days = minutesPerDay(location.regularHourPeriods);
+    const hours = readList(location.regularHourPeriods);
+    if (!hours.ok) return hours.evaluation;
+
+    const days = minutesPerDay(hours.items);
     if (days.size === 0) {
       return notApplicable('There are no hours set yet, so there is nothing to sanity-check.');
     }
 
-    const outOfRange = location.regularHourPeriods.filter(
+    const outOfRange = hours.items.filter(
       (p) =>
         p.openMinutes < 0 || p.openMinutes > 1440 || p.closeMinutes < 0 || p.closeMinutes > 1440,
     );
@@ -233,16 +242,21 @@ const D3: CheckDefinition = {
     const today = isoDate(ctx.now);
     const windowEnd = addDays(today, FESTIVAL_WINDOW_DAYS);
 
+    // A special-hours list Google never returned tells us nothing about whether
+    // the festival is covered, so there is nothing here to score either way.
+    const special = readList(location.specialHourPeriods);
+    if (!special.ok) return special.evaluation;
+
     // Stale holiday hours are an observed fact and do not need the calendar.
-    const periods = location.specialHourPeriods;
+    const periods = special.items;
     if (periods.length > 0 && periods.every((p) => p.endDate < today)) {
       const newest = periods.reduce((a, b) => (a.endDate > b.endDate ? a : b));
       return fail({
         title: 'Your holiday hours on Google are out of date',
         detail:
           `The special hours on your listing all ended on ${newest.endDate}. Old holiday hours ` +
-          'sometimes keep showing, and they tell people you are shut when you are open. We will ' +
-          'clear them and set the next one.',
+          'sometimes keep showing, and they tell people you are shut when you are open. Clearing ' +
+          'them is under Hours in the Google Business Profile app — we will show you where to tap.',
         observation: `All ${periods.length} specialHourPeriods ended before ${today}.`,
         evidence: [`Latest special hours end: ${newest.endDate}`, `Today: ${today}`],
       });
@@ -281,9 +295,9 @@ const D3: CheckDefinition = {
     return fail({
       title: `${next.name} is in ${daysAway} ${daysAway === 1 ? 'day' : 'days'} and your hours say normal`,
       detail:
-        `Google still shows your usual timings for ${next.name}. Tell us whether you are closed or ` +
-        'on shorter hours and we will set it — Google then shows a holiday note to everyone who ' +
-        'searches for you that day.',
+        `Google still shows your usual timings for ${next.name}. Special hours for that one day ` +
+        'go under Hours in the Google Business Profile app, and Google then shows a holiday note ' +
+        'to everyone who searches for you that day. We will show you where to tap.',
       observation: `No specialHourPeriod covers ${next.date} (${next.name}).`,
       evidence: [
         `${next.name}: ${next.date}`,
@@ -319,7 +333,10 @@ const D4: CheckDefinition = {
     if (!DEPARTMENT_HOURS_CATEGORIES.includes(owner.business.category)) {
       return notApplicable('Your kind of business does not usually have separate department hours.');
     }
-    if (location.moreHours.length > 0) return pass();
+
+    const more = readList(location.moreHours);
+    if (!more.ok) return more.evaluation;
+    if (more.items.length > 0) return pass();
 
     const example =
       owner.business.category === 'clinic'

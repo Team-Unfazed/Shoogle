@@ -31,10 +31,7 @@ export {
   type DailyMetricGroup,
   type DailyMetricSentinel,
   type EvidenceBasis,
-  type KeywordImpressionRow,
-  type KeywordImpressions,
   type LiveDailyMetric,
-  type RawInsightsValue,
   type RemovedMetricDefinition,
   type RemovedMetricId,
   type RenamedMetricDefinition,
@@ -44,6 +41,15 @@ export {
 
 /* Keyword impressions ------------------------------------------------------ */
 
+/**
+ * The canonical threshold union and the ONE formatter for it. `./keywords` is
+ * the only file in the repository that declares them: `features/gbp` and
+ * `features/audit` import from here rather than keeping their own copies, so a
+ * screen that pulls in two of those barrels cannot end up with two
+ * same-named formatters that render the same reading differently.
+ *
+ * The exact member is spelled `value` (`{ kind: 'exact', value: 240 }`).
+ */
 export {
   belowThresholdImpressions,
   compareKeywordRows,
@@ -54,6 +60,9 @@ export {
   groupThousands,
   isBelowThreshold,
   parseInsightsValue,
+  type KeywordImpressionRow,
+  type KeywordImpressions,
+  type RawInsightsValue,
 } from './keywords';
 
 /* Metric registries -------------------------------------------------------- */

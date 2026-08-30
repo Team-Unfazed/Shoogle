@@ -15,10 +15,12 @@ import { formatKeywordImpressions, type CheckDefinition } from '../types';
 import {
   CAP_PATCHABLE_NO_METHOD,
   fail,
+  itemsIfRead,
   need,
   notApplicable,
   notChecked,
   pass,
+  readList,
   warn,
 } from './helpers';
 
@@ -64,7 +66,8 @@ const C1: CheckDefinition = {
       title: 'Your listing has no main category',
       detail:
         'Google uses the main category to decide which searches you can show up in. Without one you ' +
-        'are competing for nothing. Tell us what you do and we will set it.',
+        'are competing for nothing. It is one tap under Edit profile in the Google Business ' +
+        'Profile app, and we will show you where.',
       observation: 'categories.primaryCategory is absent.',
       evidence: ['Main category: none'],
     });
@@ -100,11 +103,20 @@ const C2: CheckDefinition = {
 
     // Guardrail from §2 area C: with almost no reviews and no services listed we
     // have nothing to infer from, and inference without evidence is a guess.
-    if (reviews.items.length < 5 && location.serviceItems.length === 0) {
-      return notChecked(
-        'insufficient_data',
-        'We need a few reviews or your list of services before we can judge whether your category fits.',
-      );
+    //
+    // A service list Google never returned is NOT an empty service list. If the
+    // reviews are too thin to carry the inference on their own, an unread
+    // service list leaves us with nothing measured at all — that is
+    // `not_checked` carrying Google's reason, not "you listed no services".
+    if (reviews.items.length < 5) {
+      const services = location.serviceItems;
+      if (services.kind === 'not_read') return notChecked(services.why, services.detail);
+      if (services.items.length === 0) {
+        return notChecked(
+          'insufficient_data',
+          'We need a few reviews or your list of services before we can judge whether your category fits.',
+        );
+      }
     }
 
     const markers = CATEGORY_MARKERS[owner.business.category];
@@ -128,7 +140,10 @@ const C2: CheckDefinition = {
             .map((k) => `"${k.keyword}" — ${formatKeywordImpressions(k.impressions)} people`)
         : [];
 
-    const serviceEvidence = location.serviceItems.slice(0, 4).map((s) => s.name);
+    // Evidence only — an unread service list contributes nothing rather than
+    // being cited as "no services on record", which we did not measure.
+    const readServices = itemsIfRead(location.serviceItems);
+    const serviceEvidence = (readServices ?? []).slice(0, 4).map((s) => s.name);
     const declaredEvidence = owner.declaredServices.slice(0, 4);
     const whatYouDo = [...serviceEvidence, ...declaredEvidence].slice(0, 4);
 
@@ -137,8 +152,9 @@ const C2: CheckDefinition = {
       detail:
         `Google has you under "${current}"` +
         (whatYouDo.length > 0 ? `, but the work you have told us about is ${whatYouDo.join(', ')}` : '') +
-        '. Your main category decides which searches you can appear in at all. If it is wrong, tell ' +
-        'us and we will change it — and you can put it back in one tap.',
+        '. Your main category decides which searches you can appear in at all. If it is wrong, ' +
+        'changing it is one tap under Edit profile in the Google Business Profile app — we will ' +
+        'show you where, and it is just as easy to change back.',
       observation: `primaryCategory "${current}" does not match the ${owner.business.category} category family.`,
       evidence: [
         `Google main category: ${current}`,
@@ -170,14 +186,19 @@ const C3: CheckDefinition = {
     const got = need(ctx, 'location');
     if (!got.ok) return got.evaluation;
     const { location } = got.data;
-    const count = location.additionalCategories.length;
+
+    // "Google did not send us your extra categories" is not "you have none".
+    const extra = readList(location.additionalCategories);
+    if (!extra.ok) return extra.evaluation;
+    const count = extra.items.length;
 
     if (count === 0) {
       return fail({
         title: 'You only have one category',
         detail:
           'Adding two or three more categories for the other things you do puts you into more ' +
-          'searches without changing your main one. We can suggest them from your services.',
+          'searches without changing your main one. They sit beside your main one under Edit ' +
+          'profile in the Google Business Profile app — we will show you where to tap.',
         observation: 'additionalCategories is empty.',
         evidence: ['Extra categories: 0'],
       });
@@ -220,13 +241,18 @@ const C4: CheckDefinition = {
       return notApplicable('Google does not offer a service list for your type of business.');
     }
 
-    if (location.serviceItems.length === 0) {
+    // A list Google never returned cannot be reported as an empty list.
+    const services = readList(location.serviceItems);
+    if (!services.ok) return services.evaluation;
+
+    if (services.items.length === 0) {
       const example = owner.declaredServices[0] ?? 'the work you do';
       return fail({
         title: "Your services aren't listed on Google",
         detail:
           `Someone searching for "${example}" near them cannot find you if you have not said you do ` +
-          'it. We can put your service list on Google from what you have already told us.',
+          'it. Your service list is under Edit profile in the Google Business Profile app — we ' +
+          'will show you where to tap.',
         observation: 'serviceItems is empty on a location that supports a service list.',
         evidence: [
           'Services on Google: 0',
@@ -235,7 +261,7 @@ const C4: CheckDefinition = {
       });
     }
 
-    const listed = new Set(location.serviceItems.map((s) => s.name.trim().toLowerCase()));
+    const listed = new Set(services.items.map((s) => s.name.trim().toLowerCase()));
     const missing = owner.declaredServices.filter((s) => !listed.has(s.trim().toLowerCase()));
     if (missing.length === 0) return pass();
 
@@ -243,10 +269,10 @@ const C4: CheckDefinition = {
       title: `${missing.length} of the services you do are not on Google`,
       detail:
         `You told us you do ${missing.slice(0, 3).join(', ')}, and that is not on your listing. ` +
-        'We can add them so those searches can find you.',
+        'We will show you where to add them so those searches can find you.',
       observation: `${missing.length} declared services are absent from serviceItems.`,
       evidence: [
-        `On Google: ${location.serviceItems.length}`,
+        `On Google: ${services.items.length}`,
         `Missing: ${missing.slice(0, 5).join(', ')}`,
       ],
       confidence: 'inferred',
@@ -277,12 +303,16 @@ const C5: CheckDefinition = {
     if (!location.metadata.canModifyServiceList) {
       return notApplicable('Google does not offer a service list for your type of business.');
     }
-    if (location.serviceItems.length === 0) {
+
+    const services = readList(location.serviceItems);
+    if (!services.ok) return services.evaluation;
+
+    if (services.items.length === 0) {
       return notApplicable('There are no services listed yet, so there are no prices to add.');
     }
 
-    const total = location.serviceItems.length;
-    const priced = location.serviceItems.filter((s) => s.priceInPaise !== null).length;
+    const total = services.items.length;
+    const priced = services.items.filter((s) => s.priceInPaise !== null).length;
     if (priced === total) return pass();
 
     const evidence = [`Services listed: ${total}`, `Services with a price: ${priced}`];
@@ -291,7 +321,8 @@ const C5: CheckDefinition = {
         title: 'None of your services show a price',
         detail:
           'Adding prices helps people decide before they call, and cuts down the "how much?" calls ' +
-          'you take all day. We can add them from your rate list.',
+          'you take all day. A price sits beside each service in the Google Business Profile app — ' +
+          'we will show you where to tap.',
         observation: `0 of ${total} serviceItems carry a price.`,
         evidence,
       });

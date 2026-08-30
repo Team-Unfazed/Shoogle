@@ -13,7 +13,8 @@ import {
   parsePerformancePeriod,
   totalOver,
 } from '@/features/gbp/performance';
-import { formatKeywordImpressions, LIVE_DAILY_METRICS } from '@/features/gbp/types';
+import { formatKeywordImpressions } from '@/features/gbp/types';
+import { LIVE_DAILY_METRIC_ORDER, LIVE_DAILY_METRICS } from '@/features/seo';
 import type { GbpFetchMultiDailyMetricsResponse } from '@/features/gbp/types';
 
 /**
@@ -188,7 +189,7 @@ describe('the DAILY_METRIC_UNKNOWN sentinel never becomes a value', () => {
     expect(extractSeries(response).map((entry) => entry.metric)).toEqual(['CALL_CLICKS']);
     const { metrics } = buildMetrics(response, WEEK, 'last 7 days');
     expect(metrics).toHaveLength(1);
-    expect(metrics[0]?.key).toBe('call_clicks');
+    expect(metrics[0]?.key).toBe(LIVE_DAILY_METRICS.CALL_CLICKS.key);
   });
 });
 
@@ -196,16 +197,16 @@ describe('missingMetrics', () => {
   it('names every live metric Google reported nothing for', () => {
     const produced: Metric[] = [
       {
-        key: 'call_clicks',
-        label: 'Call button taps',
+        key: LIVE_DAILY_METRICS.CALL_CLICKS.key,
+        label: LIVE_DAILY_METRICS.CALL_CLICKS.label,
         value: 1,
         unit: 'count',
         period: 'last 7 days',
         changePct: null,
       },
     ];
-    const missing = missingMetrics(LIVE_DAILY_METRICS, produced);
-    expect(missing).toHaveLength(LIVE_DAILY_METRICS.length - 1);
+    const missing = missingMetrics(LIVE_DAILY_METRIC_ORDER, produced);
+    expect(missing).toHaveLength(LIVE_DAILY_METRIC_ORDER.length - 1);
     expect(missing).not.toContain('CALL_CLICKS');
   });
 });
@@ -214,7 +215,7 @@ describe('search keyword impressions are a union, not a number', () => {
   it('keeps an exact value exact', () => {
     expect(
       normaliseKeywordRow({ searchKeyword: 'salon nerul', insightsValue: { value: '42' } }),
-    ).toEqual({ keyword: 'salon nerul', impressions: { kind: 'exact', uniqueUsers: 42 } });
+    ).toEqual({ keyword: 'salon nerul', impressions: { kind: 'exact', value: 42 } });
   });
 
   it('keeps a threshold a threshold and renders it as a lower bound', () => {
@@ -223,7 +224,7 @@ describe('search keyword impressions are a union, not a number', () => {
       insightsValue: { threshold: '15' },
     });
     expect(row?.impressions).toEqual({ kind: 'below_threshold', threshold: 15 });
-    expect(formatKeywordImpressions(row?.impressions ?? { kind: 'exact', uniqueUsers: 0 })).toBe(
+    expect(formatKeywordImpressions(row?.impressions ?? { kind: 'exact', value: 0 })).toBe(
       '<15',
     );
   });
@@ -234,7 +235,7 @@ describe('search keyword impressions are a union, not a number', () => {
   });
 
   it('renders a genuine zero as zero', () => {
-    expect(formatKeywordImpressions({ kind: 'exact', uniqueUsers: 0 })).toBe('0');
+    expect(formatKeywordImpressions({ kind: 'exact', value: 0 })).toBe('0');
   });
 
   it('drops a row Google gave neither a value nor a threshold for', () => {
@@ -245,6 +246,9 @@ describe('search keyword impressions are a union, not a number', () => {
         { searchKeyword: 'a', insightsValue: { value: '1' } },
         { searchKeyword: 'b', insightsValue: {} },
       ]),
-    ).toHaveLength(1);
+    ).toEqual({
+      rows: [{ keyword: 'a', impressions: { kind: 'exact', value: 1 } }],
+      skipped: 1,
+    });
   });
 });

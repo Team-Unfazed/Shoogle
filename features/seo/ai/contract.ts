@@ -27,8 +27,10 @@
  * and implementations are required to refuse anything that is not fixture data.
  *
  * The guard is enforced twice on purpose — once on the declared classification
- * and once on the content itself — because a declaration is a promise and a
- * promise can be wrong.
+ * and once on the payload's own content — because a declaration is a promise
+ * and a promise can be wrong. Both checks read `AiRequestEnvelope`; neither may
+ * be evaluated against a rendered prompt, where our own instruction text could
+ * satisfy a check that is supposed to be about the caller's data.
  */
 
 import { unavailable, type UnavailableReason, type UnavailableState } from '@/lib/state/DataState';
@@ -52,8 +54,12 @@ export type AiDataClassification =
 
 /**
  * The visible marker every fixture value carries (see `fixtures/README.md`).
- * The Gemini client checks for it in the rendered prompt, so mislabelling real
- * data as `fixture` still fails.
+ *
+ * The Gemini client checks for it in `AiRequestEnvelope.payload` — the data the
+ * classification actually covers — so mislabelling real data as `fixture` still
+ * fails. It is deliberately NOT checked against the instruction or against the
+ * two concatenated: the instruction is written by us, carries no
+ * classification, and a marker in it would prove nothing about the payload.
  */
 export const FIXTURE_MARKER = '[FIXTURE]';
 

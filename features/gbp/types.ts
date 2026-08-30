@@ -15,6 +15,8 @@
  *    are three different facts and all three survive to the pixel.
  */
 
+import type { KeywordImpressions } from '@/features/seo';
+
 /* -------------------------------------------------------------------------- */
 /* Common wire shapes                                                         */
 /* -------------------------------------------------------------------------- */
@@ -338,9 +340,16 @@ export interface GbpListReviewsResponse {
  * `REVIEW_REPLY_STATE_MEANINGS`. Because that table is empty today, no code
  * path can currently produce it — which is exactly right: Google moderates
  * replies, so a 200 from `updateReply` is not publication.
+ *
+ * `published` carries a REAL timestamp by construction. When Google says a
+ * reply is live but sends no `updateTime`, the honest answer is
+ * `published_time_unknown` — we will not manufacture a moment that Google
+ * never reported, and we will not borrow the review's own timestamp for it.
  */
 export type GbpReplyModeration =
   | { kind: 'published'; updateTime: string }
+  /** Google says the reply is live but never said when. The time is UNKNOWN, not "now". */
+  | { kind: 'published_time_unknown' }
   | { kind: 'pending_moderation'; submittedAt: string | null }
   | { kind: 'rejected'; reason: string | null; helpUri: string | null }
   /** Google reported a state token we have not verified the meaning of. */
@@ -507,59 +516,18 @@ export interface GbpCreateLocalPostBody {
 /* -------------------------------------------------------------------------- */
 
 /**
- * The ELEVEN metrics that still exist. This is the entire universe of GBP
- * performance data available today.
+ * THE METRIC REGISTRY LIVES IN `features/seo`, NOT HERE.
  *
- * Impressions are deduplicated per unique user per day, so "impressions" is not
- * "views". There are exactly four impression metrics; any single "profile
- * views" number must be the stated sum of those four or not shown at all.
+ * `LIVE_DAILY_METRICS`, `LIVE_DAILY_METRIC_ORDER`, `DAILY_METRIC_UNKNOWN`,
+ * `isRenderableDailyMetric` and `dailyMetricLabel` are all defined once, in
+ * `features/seo/metrics.ts`, and imported from `@/features/seo`. This file
+ * used to carry a second copy with a different shape and slightly different
+ * labels, which meant two answers to "what are the eleven metrics and what is
+ * this one called". There is now exactly one.
+ *
+ * `features/seo` is the leaf module — it performs no HTTP and imports nothing
+ * from here — so `gbp → seo` is the correct direction and creates no cycle.
  */
-export const LIVE_DAILY_METRICS = [
-  'BUSINESS_IMPRESSIONS_DESKTOP_MAPS',
-  'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH',
-  'BUSINESS_IMPRESSIONS_MOBILE_MAPS',
-  'BUSINESS_IMPRESSIONS_MOBILE_SEARCH',
-  'BUSINESS_CONVERSATIONS',
-  'BUSINESS_DIRECTION_REQUESTS',
-  'CALL_CLICKS',
-  'WEBSITE_CLICKS',
-  'BUSINESS_BOOKINGS',
-  'BUSINESS_FOOD_ORDERS',
-  'BUSINESS_FOOD_MENU_CLICKS',
-] as const;
-
-export type GbpLiveDailyMetric = (typeof LIVE_DAILY_METRICS)[number];
-
-/**
- * The sentinel. It is a member of Google's `DailyMetric` enum but it is NOT a
- * metric — it is "unspecified". It must never reach a tile, a chart or a label.
- * `isRenderableDailyMetric` is the only gate that lets a value through.
- */
-export const DAILY_METRIC_UNKNOWN = 'DAILY_METRIC_UNKNOWN';
-
-export type GbpDailyMetric = GbpLiveDailyMetric | typeof DAILY_METRIC_UNKNOWN;
-
-const LIVE_METRIC_SET: ReadonlySet<string> = new Set<string>(LIVE_DAILY_METRICS);
-
-/** True only for the eleven real metrics. The sentinel and junk both fail. */
-export function isRenderableDailyMetric(value: string): value is GbpLiveDailyMetric {
-  return LIVE_METRIC_SET.has(value);
-}
-
-/** Owner-facing labels. Wording reflects dedup — "impressions", not "views". */
-export const DAILY_METRIC_LABELS: Readonly<Record<GbpLiveDailyMetric, string>> = Object.freeze({
-  BUSINESS_IMPRESSIONS_DESKTOP_MAPS: 'Maps impressions (desktop)',
-  BUSINESS_IMPRESSIONS_DESKTOP_SEARCH: 'Search impressions (desktop)',
-  BUSINESS_IMPRESSIONS_MOBILE_MAPS: 'Maps impressions (mobile)',
-  BUSINESS_IMPRESSIONS_MOBILE_SEARCH: 'Search impressions (mobile)',
-  BUSINESS_CONVERSATIONS: 'Messages received',
-  BUSINESS_DIRECTION_REQUESTS: 'Direction requests',
-  CALL_CLICKS: 'Call button taps',
-  WEBSITE_CLICKS: 'Website taps',
-  BUSINESS_BOOKINGS: 'Bookings',
-  BUSINESS_FOOD_ORDERS: 'Food orders',
-  BUSINESS_FOOD_MENU_CLICKS: 'Menu taps',
-});
 
 /**
  * Things Google DELETED in 2023 with no replacement. These are not "coming
@@ -660,9 +628,15 @@ export interface GbpSearchKeywordsResponse {
  * number. Rendering a threshold as a value fabricates data; rendering it as 0
  * breaks "unknown is not zero" twice over. It renders as "<15".
  */
-export type GbpKeywordImpressions =
-  | { kind: 'exact'; uniqueUsers: number }
-  | { kind: 'below_threshold'; threshold: number };
+/**
+ * Alias of the single union owned by `features/seo/keywords.ts`.
+ *
+ * This was previously a second, structurally-different declaration whose
+ * formatter rendered 1240 where seo's rendered 1,240 — the same number shown
+ * two ways depending on which module a screen happened to import. One union,
+ * one formatter.
+ */
+export type GbpKeywordImpressions = KeywordImpressions;
 
 export interface GbpKeywordRow {
   /** Google lowercases these. */
@@ -670,12 +644,27 @@ export interface GbpKeywordRow {
   impressions: GbpKeywordImpressions;
 }
 
-/** The only sanctioned rendering. Never returns a bare number for a threshold. */
-export function formatKeywordImpressions(impressions: GbpKeywordImpressions): string {
-  return impressions.kind === 'exact'
-    ? String(impressions.uniqueUsers)
-    : `<${impressions.threshold}`;
+/**
+ * A keyword list plus what it cost to build.
+ *
+ * `skipped` counts rows Google returned that carried no usable keyword, or an
+ * `insightsValue` with neither a value nor a threshold. Those rows are real
+ * keywords we cannot describe honestly, so they are not in `rows` — and a list
+ * that is missing them is NOT a complete list. Anything rendering `rows` must
+ * say so when `skipped > 0`; a shorter list presented as the whole truth is the
+ * silent truncation this codebase forbids.
+ */
+export interface GbpKeywordReport {
+  rows: GbpKeywordRow[];
+  skipped: number;
 }
+
+/**
+ * Re-exported from `features/seo`, which owns the one formatter. Do not
+ * declare another: it groups thousands and handles the below-threshold case,
+ * and a second implementation will drift from it.
+ */
+export { formatKeywordImpressions } from '@/features/seo';
 
 /* -------------------------------------------------------------------------- */
 /* Capabilities Google does not offer at all                                  */

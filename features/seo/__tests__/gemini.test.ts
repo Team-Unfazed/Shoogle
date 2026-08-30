@@ -41,6 +41,11 @@ function request(payload: string, real = false): AiTextRequest {
   };
 }
 
+/** Same request, but with the instruction under the test's control. */
+function requestWithInstruction(instruction: string, payload: string): AiTextRequest {
+  return { task: 'business_description', instruction, input: fixtureInput(payload) };
+}
+
 function runtimeWith(fetchImpl: jest.Mock, overrides: Partial<GeminiRuntime> = {}) {
   return createGeminiAiProvider({
     isDev: () => true,
@@ -131,6 +136,74 @@ describe('refusing data that is not fixture data', () => {
       expect(state.message).toBe(REFUSAL_MISSING_MARKER);
     }
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  /**
+   * REGRESSION: the marker guard used to run against the RENDERED prompt
+   * (instruction + payload). That made it defeatable by the half of the string
+   * that carries no classification at all: an instruction mentioning the
+   * marker — a prompt that quotes this very rule would do it — escorted a real
+   * business's payload to the free tier. The guard must read
+   * `request.input.payload` and nothing else.
+   */
+  describe('the marker guard reads the payload, not the rendered prompt', () => {
+    it('refuses when only the INSTRUCTION carries the marker, and sends nothing', async () => {
+      const fetchImpl = makeFetch();
+      const provider = runtimeWith(fetchImpl);
+
+      const state = await provider.generateText(
+        requestWithInstruction(
+          `Write one sentence. Only ${FIXTURE_MARKER} data may be sent here.`,
+          'Sharma Hair Studio, Nerul West. Owner Anita. 022 4455 6677.',
+        ),
+      );
+
+      expect(state.status).toBe('unavailable');
+      if (state.status === 'unavailable') {
+        expect(state.reason).toBe('not_supported');
+        expect(state.message).toBe(REFUSAL_MISSING_MARKER);
+      }
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('refuses an empty payload even when the instruction carries the marker', async () => {
+      const fetchImpl = makeFetch();
+      const provider = runtimeWith(fetchImpl);
+
+      const state = await provider.generateText(
+        requestWithInstruction(`${FIXTURE_MARKER} rewrite this.`, ''),
+      );
+
+      expect(state.status).toBe('unavailable');
+      if (state.status === 'unavailable') expect(state.message).toBe(REFUSAL_MISSING_MARKER);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('accepts a marked payload under an instruction that never mentions the marker', async () => {
+      const fetchImpl = makeFetch();
+      const provider = runtimeWith(fetchImpl);
+
+      const state = await provider.generateText(
+        requestWithInstruction('Write one sentence.', FIXTURE_PAYLOAD),
+      );
+
+      expect(state.status).toBe('ready');
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it('never sends a payload it refused, whatever the instruction said', async () => {
+      const fetchImpl = makeFetch();
+      const provider = runtimeWith(fetchImpl);
+      const secret = 'Sharma Hair Studio, Nerul West';
+
+      await provider.generateText(
+        requestWithInstruction(`${FIXTURE_MARKER} ${FIXTURE_MARKER}`, secret),
+      );
+
+      expect(fetchImpl).not.toHaveBeenCalled();
+      const bodies = fetchImpl.mock.calls.map(([, init]) => JSON.stringify(init));
+      expect(bodies.join('')).not.toContain(secret);
+    });
   });
 
   it('refuses when fixture mode is off, even in development', async () => {

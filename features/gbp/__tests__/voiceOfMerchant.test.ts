@@ -120,7 +120,7 @@ describe('voiceOfMerchantGate', () => {
       reason: 'not_supported',
     });
     expect(voiceOfMerchantGate({ kind: 'wait_for_voice_of_merchant' })).toMatchObject({
-      reason: 'no_data_yet',
+      reason: 'insufficient_data',
     });
     expect(voiceOfMerchantGate({ kind: 'resolve_ownership_conflict' })).toMatchObject({
       reason: 'not_supported',

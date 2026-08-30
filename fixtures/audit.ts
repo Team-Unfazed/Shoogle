@@ -19,7 +19,13 @@
  * have something real to render.
  */
 
-import { runAuditEngine, type AuditInput, type AuditObservations, type AuditRun } from '@/features/audit';
+import {
+  readCollection,
+  runAuditEngine,
+  type AuditInput,
+  type AuditObservations,
+  type AuditRun,
+} from '@/features/audit';
 import { isFixtureModeEnabled } from '@/lib/env';
 import type { GbpReview } from '@/lib/providers/contracts';
 import { ready, unavailable, type DataState } from '@/lib/state/DataState';
@@ -116,29 +122,31 @@ const fixtureObservations: AuditObservations = {
     primaryPhone: '+91 98200 00000',
     websiteUri: 'https://fixture.example/',
     primaryCategory: { categoryId: 'gcid:beauty_salon', displayName: 'Beauty salon' },
-    additionalCategories: [
+    // `readCollection` says "Google answered, and this is what it said". An
+    // empty one below is therefore a measured zero, not a gap in the fixture.
+    additionalCategories: readCollection([
       { categoryId: 'gcid:hair_salon', displayName: 'Hair salon' },
       { categoryId: 'gcid:nail_salon', displayName: 'Nail salon' },
-    ],
-    serviceItems: [
+    ]),
+    serviceItems: readCollection([
       { name: '[FIXTURE] Haircut', priceInPaise: 30_000 },
       { name: '[FIXTURE] Hair spa', priceInPaise: 120_000 },
-    ],
-    regularHourPeriods: [
+    ]),
+    regularHourPeriods: readCollection([
       { day: 'TUESDAY', openMinutes: 600, closeMinutes: 1200 },
       { day: 'WEDNESDAY', openMinutes: 600, closeMinutes: 1200 },
       { day: 'THURSDAY', openMinutes: 600, closeMinutes: 1200 },
       { day: 'FRIDAY', openMinutes: 600, closeMinutes: 1200 },
       { day: 'SATURDAY', openMinutes: 600, closeMinutes: 1260 },
       { day: 'SUNDAY', openMinutes: 600, closeMinutes: 1260 },
-    ],
-    specialHourPeriods: [],
-    moreHours: [],
+    ]),
+    specialHourPeriods: readCollection([]),
+    moreHours: readCollection([]),
     serviceArea: null,
     profileDescription:
       '[FIXTURE] A short invented description that does not mention the locality or any service, ' +
       'so the description check has something to say.',
-    attributeIds: ['has_wheelchair_accessible_entrance'],
+    attributeIds: readCollection(['has_wheelchair_accessible_entrance']),
     openInfo: { status: 'OPEN' },
     metadata: {
       hasVoiceOfMerchant: true,
@@ -190,7 +198,7 @@ const fixtureObservations: AuditObservations = {
     },
   }),
   searchKeywords: fx([
-    { keyword: '[FIXTURE] hair spa near me', impressions: { kind: 'exact', uniqueUsers: 240 } },
+    { keyword: '[FIXTURE] hair spa near me', impressions: { kind: 'exact', value: 240 } },
     // A threshold, not a number. This must render as "<15", never as 15 and
     // never as 0 - see docs/research/google-business-profile.md §7b.
     { keyword: '[FIXTURE] salon example locality', impressions: { kind: 'below_threshold', threshold: 15 } },

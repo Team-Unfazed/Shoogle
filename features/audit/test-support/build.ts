@@ -14,6 +14,7 @@ import type { Business } from '@/types/domain';
 
 import {
   AREA_WEIGHT,
+  readCollection,
   type AuditArea,
   type AuditInput,
   type AuditObservations,
@@ -21,9 +22,15 @@ import {
   type CheckId,
   type CheckOutcome,
   type CheckResult,
+  type GbpCategoryRef,
   type GbpLocationDetail,
+  type GbpMoreHoursObservation,
+  type GbpServiceItemObservation,
+  type GbpSpecialHourPeriodObservation,
+  type GbpTimePeriodObservation,
   type ObservationValues,
   type OwnerContext,
+  type ReadCollection,
   type WebsiteObservation,
 } from '../types';
 
@@ -59,7 +66,46 @@ export function ownerContext(overrides: Partial<OwnerContext> = {}): OwnerContex
   };
 }
 
-export function locationDetail(overrides: Partial<GbpLocationDetail> = {}): GbpLocationDetail {
+/** Every collection field on `GbpLocationDetail`, so the override type can name them. */
+type LocationCollectionField =
+  | 'additionalCategories'
+  | 'serviceItems'
+  | 'regularHourPeriods'
+  | 'specialHourPeriods'
+  | 'moreHours'
+  | 'attributeIds';
+
+/**
+ * A test may pass a bare array (the overwhelmingly common case: "Google
+ * returned this list") or an explicit `ReadCollection` when the point of the
+ * test IS the difference between an empty list and an unread one.
+ */
+type Collectionish<T> = ReadCollection<T> | readonly T[];
+
+function asCollection<T>(value: Collectionish<T>): ReadCollection<T> {
+  return Array.isArray(value) ? readCollection(value as readonly T[]) : (value as ReadCollection<T>);
+}
+
+export type LocationOverrides = Partial<Omit<GbpLocationDetail, LocationCollectionField>> & {
+  additionalCategories?: Collectionish<GbpCategoryRef>;
+  serviceItems?: Collectionish<GbpServiceItemObservation>;
+  regularHourPeriods?: Collectionish<GbpTimePeriodObservation>;
+  specialHourPeriods?: Collectionish<GbpSpecialHourPeriodObservation>;
+  moreHours?: Collectionish<GbpMoreHoursObservation>;
+  attributeIds?: Collectionish<string>;
+};
+
+export function locationDetail(overrides: LocationOverrides = {}): GbpLocationDetail {
+  const {
+    additionalCategories,
+    serviceItems,
+    regularHourPeriods,
+    specialHourPeriods,
+    moreHours,
+    attributeIds,
+    ...scalars
+  } = overrides;
+
   return {
     locationId: 'locations/1',
     title: 'Sunrise Salon',
@@ -75,21 +121,27 @@ export function locationDetail(overrides: Partial<GbpLocationDetail> = {}): GbpL
     primaryPhone: '+91 98200 12345',
     websiteUri: 'https://sunrisesalon.example/',
     primaryCategory: { categoryId: 'gcid:beauty_salon', displayName: 'Beauty salon' },
-    additionalCategories: [{ categoryId: 'gcid:hair_salon', displayName: 'Hair salon' }],
-    serviceItems: [
-      { name: 'Haircut', priceInPaise: 30_000 },
-      { name: 'Hair spa', priceInPaise: 120_000 },
-    ],
-    regularHourPeriods: [
-      { day: 'TUESDAY', openMinutes: 600, closeMinutes: 1200 },
-      { day: 'WEDNESDAY', openMinutes: 600, closeMinutes: 1200 },
-      { day: 'THURSDAY', openMinutes: 600, closeMinutes: 1200 },
-      { day: 'FRIDAY', openMinutes: 600, closeMinutes: 1200 },
-      { day: 'SATURDAY', openMinutes: 600, closeMinutes: 1260 },
-      { day: 'SUNDAY', openMinutes: 600, closeMinutes: 1260 },
-    ],
-    specialHourPeriods: [],
-    moreHours: [],
+    additionalCategories: asCollection(
+      additionalCategories ?? [{ categoryId: 'gcid:hair_salon', displayName: 'Hair salon' }],
+    ),
+    serviceItems: asCollection(
+      serviceItems ?? [
+        { name: 'Haircut', priceInPaise: 30_000 },
+        { name: 'Hair spa', priceInPaise: 120_000 },
+      ],
+    ),
+    regularHourPeriods: asCollection(
+      regularHourPeriods ?? [
+        { day: 'TUESDAY', openMinutes: 600, closeMinutes: 1200 },
+        { day: 'WEDNESDAY', openMinutes: 600, closeMinutes: 1200 },
+        { day: 'THURSDAY', openMinutes: 600, closeMinutes: 1200 },
+        { day: 'FRIDAY', openMinutes: 600, closeMinutes: 1200 },
+        { day: 'SATURDAY', openMinutes: 600, closeMinutes: 1260 },
+        { day: 'SUNDAY', openMinutes: 600, closeMinutes: 1260 },
+      ],
+    ),
+    specialHourPeriods: asCollection(specialHourPeriods ?? []),
+    moreHours: asCollection(moreHours ?? []),
     serviceArea: null,
     profileDescription:
       'Sunrise Salon has been cutting and colouring hair in Nerul since 2009. We do haircuts, ' +
@@ -97,7 +149,7 @@ export function locationDetail(overrides: Partial<GbpLocationDetail> = {}): GbpL
       'years. Walk in on a weekday or book ahead for weekends, when we are busiest. We use ' +
       'salon-grade products only and every tool is sterilised between clients, which is why most ' +
       'of our customers have been coming to us for a decade.',
-    attributeIds: ['pay_upi', 'requires_appointments'],
+    attributeIds: asCollection(attributeIds ?? ['pay_upi', 'requires_appointments']),
     openInfo: { status: 'OPEN' },
     metadata: {
       hasVoiceOfMerchant: true,
@@ -106,7 +158,7 @@ export function locationDetail(overrides: Partial<GbpLocationDetail> = {}): GbpL
       canHaveFoodMenus: false,
       placeId: 'ChIJtest',
     },
-    ...overrides,
+    ...scalars,
   };
 }
 
@@ -201,7 +253,7 @@ export function healthyObservations(
       labelsById: { pay_upi: 'UPI accepted', requires_appointments: 'Appointment needed' },
     }),
     searchKeywords: ok([
-      { keyword: 'hair spa near me', impressions: { kind: 'exact', uniqueUsers: 240 } },
+      { keyword: 'hair spa near me', impressions: { kind: 'exact', value: 240 } },
       { keyword: 'salon nerul', impressions: { kind: 'below_threshold', threshold: 15 } },
     ]),
   };

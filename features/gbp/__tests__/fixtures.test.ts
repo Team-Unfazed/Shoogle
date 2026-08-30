@@ -12,6 +12,7 @@ import { GBP_PERMANENT_UNAVAILABLE_STATES } from '@/features/gbp/capabilities';
 import { classifyReply, toReviewDetail } from '@/features/gbp/mappers';
 import { buildMetrics, buildWindows } from '@/features/gbp/performance';
 import { classifyVoiceOfMerchant } from '@/features/gbp/voiceOfMerchant';
+import { LIVE_DAILY_METRICS } from '@/features/seo';
 
 /**
  * Google publishes no sandbox for the Business Profile APIs and recommends
@@ -100,15 +101,17 @@ describe('the fixtures encode the honesty rules, not just shapes', () => {
     const byKey = new Map(metrics.map((metric) => [metric.key, metric]));
 
     // Real zero day included in a complete series.
-    expect(byKey.get('call_clicks')?.value).toBe(6);
-    expect(byKey.get('call_clicks')?.period).toBe('last 4 days');
+    expect(byKey.get(LIVE_DAILY_METRICS.CALL_CLICKS.key)?.value).toBe(6);
+    expect(byKey.get(LIVE_DAILY_METRICS.CALL_CLICKS.key)?.period).toBe('last 4 days');
 
     // Unreported days are excluded from the count AND labelled.
-    expect(byKey.get('website_clicks')?.value).toBe(11);
-    expect(byKey.get('website_clicks')?.period).toMatch(/reported 2 of 4 days/);
+    expect(byKey.get(LIVE_DAILY_METRICS.WEBSITE_CLICKS.key)?.value).toBe(11);
+    expect(byKey.get(LIVE_DAILY_METRICS.WEBSITE_CLICKS.key)?.period).toMatch(
+      /reported 2 of 4 days/,
+    );
 
     // A metric Google said nothing about is absent, not zero.
-    expect(byKey.has('business_bookings')).toBe(false);
+    expect(byKey.has(LIVE_DAILY_METRICS.BUSINESS_BOOKINGS.key)).toBe(false);
     expect(omitted).toContain('BUSINESS_BOOKINGS');
   });
 

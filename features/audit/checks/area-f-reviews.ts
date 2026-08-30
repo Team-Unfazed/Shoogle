@@ -76,8 +76,8 @@ const F1: CheckDefinition = {
         title: 'You have no Google reviews yet',
         detail:
           'This is the biggest single thing standing between you and the customer choosing the shop ' +
-          'next door. We can send a review link to customers after their visit — the same link to ' +
-          'everyone, happy or not.',
+          'next door. Google gives your listing a short review link — we will show you where to ' +
+          'find it. Send the same link to every customer after their visit, happy or not.',
         observation: 'reviews.list returned 0 reviews (a successful call, empty result).',
         evidence: ['Reviews on Google: 0'],
       });
@@ -87,8 +87,8 @@ const F1: CheckDefinition = {
       return warn(count / REVIEW_CREDIBILITY_FLOOR, {
         title: `You have ${plural(count, 'review', 'reviews')}`,
         detail:
-          'Around ten is where people start trusting a rating instead of scrolling past it. We can ' +
-          'send a review link to customers after their visit.',
+          'Around ten is where people start trusting a rating instead of scrolling past it. Google ' +
+          'gives your listing a short review link, and we will show you where to find it.',
         observation: `reviews.list returned ${count} reviews.`,
         evidence: [`Reviews on Google: ${count}`],
         confidence: 'inferred',
@@ -136,7 +136,7 @@ const F2: CheckDefinition = {
         title: `Your rating is ${shown}`,
         detail:
           'Getting a few recent happy customers to leave a review moves this faster than anything ' +
-          'else. We can send them the link after their visit.',
+          'else. We will show you where to find your review link so you can send it after a visit.',
         observation: `Mean starRating is ${shown} over ${reviews.items.length} reviews.`,
         evidence,
         confidence: 'inferred',
@@ -296,8 +296,8 @@ const F5: CheckDefinition = {
       return warn(0.5, {
         title: `Your last review was ${ageDays} days ago`,
         detail:
-          'A steady trickle matters more than a big pile. We can send a review link to customers ' +
-          'after their visit — the same link to everyone.',
+          'A steady trickle matters more than a big pile. We will show you where to find your ' +
+          'review link. Send the same one to every customer, happy or not.',
         observation: `Newest review is ${ageDays} days old.`,
         evidence,
       });
@@ -305,8 +305,8 @@ const F5: CheckDefinition = {
     return fail({
       title: `Your last review was ${ageDays} days ago`,
       detail:
-        'Nothing new in three months makes a listing look quiet even when the shop is busy. We can ' +
-        'send a review link to customers after their visit.',
+        'Nothing new in three months makes a listing look quiet even when the shop is busy. We will ' +
+        'show you where to find your review link so you can send it after each visit.',
       observation: `Newest review is ${ageDays} days old.`,
       evidence,
     });

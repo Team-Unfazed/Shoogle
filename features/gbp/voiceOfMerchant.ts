@@ -201,9 +201,16 @@ export function describeVoiceOfMerchant(
  * Returns `null` when the profile holds Voice of Merchant and the call may
  * proceed, or the exact `UnavailableState` to return otherwise.
  *
- * `wait_for_voice_of_merchant` maps to `no_data_yet` because that is literally
- * true — Google has the profile and has not produced anything for it yet. The
- * other three map to `not_supported`, which is the closest reason
+ * `wait_for_voice_of_merchant` maps to `insufficient_data`, NOT `no_data_yet`.
+ * `no_data_yet` renders app-wide as "Nothing yet / There is no activity to
+ * report so far" (`UNAVAILABLE_COPY` in `lib/state/DataState.ts`), which tells
+ * an owner their business has no activity. That is a claim about THEIR
+ * business, and it is false: the truth is that Google has not finished
+ * verifying the profile, so we have not been allowed to look. `insufficient_data`
+ * renders as "Not enough data", which is a statement about what WE know and
+ * never reads as "you have none". The message carries the real reason.
+ *
+ * The other three map to `not_supported`, which is the closest reason
  * `lib/state/DataState.ts` offers today. See `BLOCKERS` in this feature's
  * README: `not_supported` reads as "Google never offers this", when the truth
  * is "Google will not offer this until the profile is sorted out". The message
@@ -220,8 +227,10 @@ export function voiceOfMerchantGate(outcome: VoiceOfMerchantOutcome): Unavailabl
       : `${explanation.body} ${explanation.ownerAction}.`;
 
   switch (outcome.kind) {
+    // Never `no_data_yet` — see the note above. "Google is still setting this
+    // up" must not render as "you have no activity".
     case 'wait_for_voice_of_merchant':
-      return unavailable('no_data_yet', message);
+      return unavailable('insufficient_data', message);
     case 'indeterminate':
       return unavailable('insufficient_data', message);
     case 'verify':

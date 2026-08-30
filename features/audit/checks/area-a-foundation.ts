@@ -186,8 +186,9 @@ const A3: CheckDefinition = {
         return fail({
           title: 'Google says you are open, but you told us you are closed',
           detail:
-            'Customers are being sent to a shop that is closed. Tell us which is right and we will ' +
-            'make your listing match.',
+            'Customers are being sent to a shop that is closed. The open-or-closed setting is under ' +
+            'Edit profile in the Google Business Profile app, and only you can change it — we will ' +
+            'show you where to tap.',
           observation: `openInfo.status is OPEN; the owner declared '${declared}'.`,
           evidence: ['Google: OPEN', `You told Shoogle: ${declared.replace('_', ' ')}`],
         });
@@ -201,7 +202,8 @@ const A3: CheckDefinition = {
           title: "Google is telling customers you're temporarily closed",
           detail:
             "Google shows your shop as temporarily closed. You told us you're open. Every person " +
-            'searching for you today is being told not to come. We can set this back to open.',
+            'searching for you today is being told not to come. Reopening it is one switch under ' +
+            'Edit profile in the Google Business Profile app — we will show you where to tap.',
           observation: "openInfo.status is CLOSED_TEMPORARILY; the owner declared 'open'.",
           evidence: ['Google: temporarily closed', 'You told Shoogle: open'],
         });
@@ -211,9 +213,9 @@ const A3: CheckDefinition = {
       return warn(0.5, {
         title: 'Google shows you as temporarily closed — is that right?',
         detail:
-          "Your listing says you're temporarily closed, and you haven't told us either way. If " +
-          "you're trading, say so and we'll switch it back — right now people searching for you " +
-          'are being told not to come.',
+          "Your listing says you're temporarily closed, and you haven't told us either way. Right " +
+          'now people searching for you are being told not to come. If you are trading, the switch ' +
+          'is under Edit profile in the Google Business Profile app — we will show you where to tap.',
         observation:
           'openInfo.status is CLOSED_TEMPORARILY and the owner has never declared a trading status.',
         evidence: ['Google: temporarily closed', 'You told Shoogle: nothing yet'],
@@ -229,8 +231,8 @@ const A3: CheckDefinition = {
         title: 'Google says your business has closed for good',
         detail:
           "Your listing is marked permanently closed. That's the strongest possible signal to stop " +
-          'sending you customers, and it usually happens by mistake or from a bad edit. We can put ' +
-          'it right.',
+          'sending you customers, and it usually happens by mistake or from a bad edit. Reopening ' +
+          'it is under Edit profile in the Google Business Profile app — we will show you where to tap.',
         observation: `openInfo.status is CLOSED_PERMANENTLY; the owner declared '${declared}'.`,
         evidence: ['Google: permanently closed', `You told Shoogle: ${declared.replace('_', ' ')}`],
       });
@@ -238,8 +240,9 @@ const A3: CheckDefinition = {
     return warn(0.5, {
       title: 'Google says your business has closed for good — is that right?',
       detail:
-        "Your listing is marked permanently closed and you haven't told us either way. If you're " +
-        'still trading, tell us and we will fix it today.',
+        "Your listing is marked permanently closed and you haven't told us either way. If you are " +
+        'still trading, this is the most urgent thing on your listing — we will show you where to ' +
+        'tap to reopen it.',
       observation:
         'openInfo.status is CLOSED_PERMANENTLY and the owner has never declared a trading status.',
       evidence: ['Google: permanently closed', 'You told Shoogle: nothing yet'],

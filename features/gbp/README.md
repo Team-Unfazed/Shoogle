@@ -58,7 +58,7 @@ answer as unknown rather than guessing.
 | File | What it is |
 |---|---|
 | `endpoints.ts` | The endpoint map. The API family is split across **five hostnames** — v4.9 for reviews/localPosts/media, separate v1 hosts for Account Management, Business Information, Performance and Verifications. Also the quota constants. |
-| `types.ts` | Wire types plus the honest domain types they map to. The eleven live `DailyMetric` values, the `DAILY_METRIC_UNKNOWN` sentinel that must never render, the search-keyword `exact | below_threshold` union, and the permanently removed capabilities. |
+| `types.ts` | Wire types plus the honest domain types they map to: the search-keyword `exact \| below_threshold` union, `GbpKeywordReport` (rows **plus** the count Shoogle refused), the reply-moderation union, and the permanently removed capabilities. The `DailyMetric` registry is NOT here — it lives once in `features/seo/metrics.ts` and is imported from `@/features/seo`. |
 | `voiceOfMerchant.ts` | The four documented remedial actions plus the healthy state and an `indeterminate` state we never treat as healthy. What each means to an owner, and how each maps to `DataState`. |
 | `errors.ts` | Real Google error shapes → `DataState`, keeping the four different meanings of HTTP 403 apart. |
 | `writeQueue.ts` | The **10 edits per minute per profile** ceiling, which Google says cannot be raised. Edits only — reads run at 300 QPM and are never queued. |
@@ -101,13 +101,21 @@ around here with a parallel adapter.
    - `starRating: 1|2|3|4|5` has no member for `STAR_RATING_UNSPECIFIED`, so
      such a review is dropped from `listReviews`. Requested: `| null`.
    - `reply: { comment, updateTime } | null` cannot say whether a reply is
-     PUBLISHED or sitting in moderation. Google moderates replies, so HTTP 200
-     is not publication. Requested: a moderation field. Until then, use
-     `GbpAdapter.submitReviewReply`, which reports the real state.
+     PUBLISHED or sitting in moderation, and its `updateTime` is a required
+     `string`, so a reply Google never timestamped cannot be expressed at all.
+     Google moderates replies, so HTTP 200 is not publication. Requested: a
+     moderation field and `updateTime: string | null`. Until then
+     `toContractReview` sets `reply: null` and flags `replyOmitted` rather than
+     borrowing the review's own timestamp, and callers use
+     `GbpAdapter.submitReviewReply` / `listReviewsDetailed` for the real state.
 4. **`lib/providers/types.ts` (Sunny) — `Paginated<T>` cannot report refusals.**
    When Google returns records we will not map, the count of skipped records has
-   nowhere to go, so the owner sees a shorter list with no explanation.
-   `GbpAdapter.listReviewsDetailed` carries `skipped[]` in the meantime.
+   nowhere to go, so a shorter list would be indistinguishable from a complete
+   one. Until `Paginated<T>` can carry a refusal count,
+   `GoogleBusinessProfileProvider.listReviews` is **export-only**: it returns
+   `failed(...)` if anything at all was lost on the way through, rather than a
+   list that looks whole. In-app screens use `GbpAdapter.listReviewsDetailed`,
+   whose `GbpReviewPage.skipped` names every loss.
 
 ## Open questions Google has not answered
 

@@ -35,6 +35,7 @@
  * - No rank position, anywhere. Google publishes none.
  */
 
+import { LIVE_DAILY_METRIC_ORDER, type LiveDailyMetric } from '@/features/seo';
 import type { GbpLocation, GbpReview, GoogleBusinessProfileProvider } from '@/lib/providers/contracts';
 import type { ConnectionInfo, Metric, Paginated, Result } from '@/lib/providers/types';
 import {
@@ -98,8 +99,7 @@ import type {
   GbpFetchMultiDailyMetricsResponse,
   GbpGoogleUpdatedDiff,
   GbpGoogleUpdatedLocationWire,
-  GbpKeywordRow,
-  GbpLiveDailyMetric,
+  GbpKeywordReport,
   GbpListAccountsResponse,
   GbpListLocationsResponse,
   GbpListReviewsResponse,
@@ -111,7 +111,6 @@ import type {
   GbpSearchKeywordsResponse,
   GbpVoiceOfMerchantStateWire,
 } from './types';
-import { LIVE_DAILY_METRICS } from './types';
 import {
   classifyVoiceOfMerchant,
   describeVoiceOfMerchant,
@@ -216,7 +215,7 @@ export interface GbpPerformanceReport {
    * Live metrics Google reported nothing for in this window. These render as
    * "—" with a reason. They are NOT zeros.
    */
-  unreported: GbpLiveDailyMetric[];
+  unreported: LiveDailyMetric[];
   windows: GbpWindows;
 }
 
@@ -233,7 +232,7 @@ export interface GbpAdapter extends GoogleBusinessProfileProvider {
   /** Reports moderation state honestly. Use this, not `replyToReview`, for UI copy. */
   submitReviewReply(locationId: string, reviewId: string, comment: string): Result<GbpReplyOutcome>;
   getPerformanceReport(locationId: string, period: string): Result<GbpPerformanceReport>;
-  listSearchKeywords(locationId: string, monthsBack: number): Result<GbpKeywordRow[]>;
+  listSearchKeywords(locationId: string, monthsBack: number): Result<GbpKeywordReport>;
   updateRegularHours(locationId: string, hours: unknown): Result<GbpHoursUpdateOutcome>;
 }
 
@@ -505,14 +504,14 @@ export function createGoogleBusinessProfileProvider(
     const windows = buildWindows(latestDate(), parsed.days);
     const result = await sendExplained<GbpFetchMultiDailyMetricsResponse>(
       ctx,
-      fetchMultiDailyMetricsRequest(location, LIVE_DAILY_METRICS, windows.combined),
+      fetchMultiDailyMetricsRequest(location, LIVE_DAILY_METRIC_ORDER, windows.combined),
       location,
       'locations.fetchMultiDailyMetricsTimeSeries',
     );
     if (!result.ok) return result.state;
 
     const { metrics } = buildMetrics(result.data, windows, parsed.label);
-    const unreported = missingMetrics(LIVE_DAILY_METRICS, metrics);
+    const unreported = missingMetrics(LIVE_DAILY_METRIC_ORDER, metrics);
 
     if (metrics.length === 0) {
       return unavailable(
@@ -572,6 +571,22 @@ export function createGoogleBusinessProfileProvider(
     return ready(page, deps.now());
   }
 
+  /**
+   * The shared-contract projection. EXPORT-ONLY — nothing inside this app
+   * should call it.
+   *
+   * `Paginated<GbpReview>` has room for `items` and a cursor and nothing else,
+   * so it cannot say "this page is missing two reviews" or "this review's reply
+   * had no timestamp". A nine-item list from a ten-review page would be
+   * indistinguishable from a complete one, and that is precisely the silent
+   * truncation this codebase forbids. So the rule here is absolute: if ANY
+   * record was lost on the way through, this method refuses instead of
+   * returning a list that looks whole.
+   *
+   * In-app screens use `listReviewsDetailed`, whose `GbpReviewPage.skipped`
+   * carries the losses and whose `GbpReviewDetail.replyModeration` carries the
+   * moderation truth.
+   */
   async function listReviews(
     locationId: string,
     cursor?: string,
@@ -580,20 +595,40 @@ export function createGoogleBusinessProfileProvider(
     if (detailed.status !== 'ready') return detailed;
 
     const items: GbpReview[] = [];
+    // Reviews Google sent that `toReviewDetail` already refused (no id, no date).
     let dropped = detailed.value.skipped.length;
+    let repliesOmitted = 0;
     for (const review of detailed.value.reviews) {
       const projected = toContractReview(review);
       // A review Google marked STAR_RATING_UNSPECIFIED cannot be expressed by
       // the shared `GbpReview` type, whose rating is 1-5. Dropping it is the
       // only option the contract leaves; see the blockers in README.md.
-      if (projected === null) dropped += 1;
-      else items.push(projected);
+      if (!projected.ok) {
+        dropped += 1;
+        continue;
+      }
+      if (projected.replyOmitted) repliesOmitted += 1;
+      items.push(projected.review);
     }
 
     if (items.length === 0 && dropped > 0) {
       return failed(
         'gbp_reviews_unmappable',
         'Google returned reviews Shoogle could not read. We have logged it rather than tell you there are none.',
+        false,
+      );
+    }
+    if (dropped > 0) {
+      return failed(
+        'gbp_reviews_partial',
+        `Google returned ${dropped + items.length} reviews and Shoogle could not read ${dropped} of them. Rather than hand you a shorter list that looks complete, nothing is returned here — the reviews Shoogle can read are available in the app.`,
+        false,
+      );
+    }
+    if (repliesOmitted > 0) {
+      return failed(
+        'gbp_reviews_reply_untimed',
+        `Google returned ${repliesOmitted} repl${repliesOmitted === 1 ? 'y' : 'ies'} without saying when ${repliesOmitted === 1 ? 'it' : 'they'} happened. This list would show those reviews as unanswered, so it is not returned rather than understating what you have already replied to.`,
         false,
       );
     }
@@ -677,14 +712,24 @@ export function createGoogleBusinessProfileProvider(
       );
     }
     const projected = toContractReview(found);
-    if (projected === null) {
+    if (!projected.ok) {
       return failed(
         'gbp_reply_state_unknown',
         'Your reply was sent to Google. Shoogle cannot show this review back to you because Google did not report a star rating for it.',
         false,
       );
     }
-    return ready(projected, deps.now());
+    if (projected.replyOmitted) {
+      // The reply is on Google but Google gave it no timestamp, so the shared
+      // shape has to drop it — and a `GbpReview` with `reply: null` would tell
+      // the caller this review is still unanswered. Refuse instead.
+      return failed(
+        'gbp_reply_state_unknown',
+        'Your reply was sent to Google. Google did not say when it recorded the reply, so Shoogle will not show you a time it made up.',
+        false,
+      );
+    }
+    return ready(projected.review, deps.now());
   }
 
   async function createLocalPost(
@@ -802,7 +847,7 @@ export function createGoogleBusinessProfileProvider(
   async function listSearchKeywords(
     locationId: string,
     monthsBack: number,
-  ): Result<GbpKeywordRow[]> {
+  ): Result<GbpKeywordReport> {
     if (!Number.isInteger(monthsBack) || monthsBack < 1) {
       return failed('gbp_invalid_month_range', 'Ask for at least one whole month.', false);
     }
@@ -831,8 +876,24 @@ export function createGoogleBusinessProfileProvider(
 
     // Rows whose volume Google reported as a threshold survive as
     // `below_threshold` and render "<15". They are never a number and never 0.
-    const rows = normaliseKeywordRows(result.data.searchKeywordsCounts);
-    return ready(rows, deps.now());
+    const { rows, skipped } = normaliseKeywordRows(result.data.searchKeywordsCounts);
+
+    // Google sent keywords and Shoogle could read none of them. `ready([])`
+    // here would render as "you have no search keywords", which is a claim
+    // about the owner's business that we have no evidence for.
+    if (rows.length === 0 && skipped > 0) {
+      return failed(
+        'gbp_keywords_unmappable',
+        `Google returned ${skipped} search keyword${skipped === 1 ? '' : 's'} that Shoogle could not read — it gave no usable search volume for any of them. That is not the same as having no keywords, so nothing is shown here.`,
+        false,
+      );
+    }
+
+    // `skipped > 0` with rows present is a PARTIAL list, and it travels with
+    // the value so the screen can say so. An empty `searchKeywordsCounts` from
+    // Google is a measured "no keywords this period" and stays ready with
+    // `skipped: 0`.
+    return ready({ rows, skipped }, deps.now());
   }
 
   return {

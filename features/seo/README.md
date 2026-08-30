@@ -51,12 +51,12 @@ is not a `ConnectableProvider`, so importing this feature claims no integration.
 
 | Module | What it is |
 |---|---|
-| `types.ts` | `KeywordImpressions` (the exact-or-bound union), the eleven live `DailyMetric` values, the removed-metric ids, `SeoFinding` |
-| `keywords.ts` | Constructors, wire parsing and the ONLY sanctioned formatter — `"1,240"` or `"<15"` |
+| `types.ts` | The eleven live `DailyMetric` values, the removed-metric ids, `SearchKeywordsReport`, `SeoFinding` (re-exports the keyword union from `keywords.ts`) |
+| `keywords.ts` | **The** `KeywordImpressions` union (exact-or-bound) plus constructors, wire parsing and the ONLY sanctioned formatter — `"1,240"` or `"<15"`. Declared once, repo-wide: `features/gbp` and `features/audit` import it from `@/features/seo` rather than keeping their own copies. The exact member is spelled `value`. |
 | `metrics.ts` | `LIVE_DAILY_METRICS` (11), `REMOVED_METRICS` (12, permanently `not_supported`), `RENAMED_METRICS`, and `toMetrics()` which OMITS unknown values |
 | `provider.ts` | `seoProvider` — rankings are permanently `not_supported` |
 | `ai/contract.ts` | `AiProvider`, the data-classification envelope, and `noAiProvider` (what production gets) |
-| `ai/gemini.ts` | Development-only client. Dev-gated, fixture-data-only, key never `EXPO_PUBLIC_` |
+| `ai/gemini.ts` | Development-only client. Dev-gated, fixture-data-only (the `[FIXTURE]` marker is checked on `input.payload`, never on the rendered prompt), key never `EXPO_PUBLIC_` |
 | `ai/visibility.ts` | The AI Visibility Check — one fetch, no model, no score |
 | `ai/schema.ts` | `LocalBusiness` JSON-LD for the seven verticals, plus inspection of markup already on a site |
 | `ai/directories.ts` | The India directory checklist — owner-answered, counts not percentages |
