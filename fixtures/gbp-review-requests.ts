@@ -51,20 +51,40 @@ export const fixturePastedReviewLink = 'https://g.page/r/FIXTURE-SHORT-LINK-0001
  * Built from `now` rather than pinned, because the whole point of the card is
  * "this week" and a pinned date would silently exercise the empty state.
  */
+/**
+ * Three requests, always inside the CURRENT week.
+ *
+ * This previously placed them at `now`, `now - 1 day` and `now - 2 days`. That
+ * looks harmless and is not: `startOfWeek` is Monday-based, so from Monday
+ * 00:00 until Wednesday the older two entries fall into the PREVIOUS week and
+ * the screen's weekly count drops from 3 to 1. The test asserting "3" passed
+ * six days out of seven and failed on the seventh — a flake that arrives
+ * overnight, blames whoever committed last, and is hard to reproduce because it
+ * fixes itself by Wednesday.
+ *
+ * Anchoring to the start of the week instead makes the fixture mean what it
+ * says on every day it runs: three confirmed requests this week.
+ */
 export function buildFixtureRequestLog(now: Date): ReviewRequestEntry[] {
   const dayMs = 24 * 60 * 60 * 1000;
+
+  // Local midnight on the Monday of this week, matching `startOfWeek`, which
+  // is deliberately local — an owner in IST sending at 1am Monday means Monday.
+  const daysSinceMonday = (now.getDay() + 6) % 7;
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  weekStart.setDate(weekStart.getDate() - daysSinceMonday);
+
+  const elapsed = now.getTime() - weekStart.getTime();
+  // Spread across the part of the week that has actually happened, so no entry
+  // is ever in the future and none escapes backwards past Monday.
+  const step = Math.min(dayMs, Math.max(0, elapsed) / 3);
+  const at = (stepsBack: number): string =>
+    new Date(Math.max(weekStart.getTime(), now.getTime() - stepsBack * step)).toISOString();
+
   return [
-    { id: 'fixture-request-0001', confirmedAt: new Date(now.getTime()).toISOString(), channel: 'whatsapp' },
-    {
-      id: 'fixture-request-0002',
-      confirmedAt: new Date(now.getTime() - dayMs).toISOString(),
-      channel: 'whatsapp',
-    },
-    {
-      id: 'fixture-request-0003',
-      confirmedAt: new Date(now.getTime() - 2 * dayMs).toISOString(),
-      channel: 'in_person',
-    },
+    { id: 'fixture-request-0001', confirmedAt: at(0), channel: 'whatsapp' },
+    { id: 'fixture-request-0002', confirmedAt: at(1), channel: 'whatsapp' },
+    { id: 'fixture-request-0003', confirmedAt: at(2), channel: 'in_person' },
   ];
 }
 

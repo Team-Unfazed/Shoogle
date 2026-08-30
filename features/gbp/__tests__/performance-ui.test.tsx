@@ -52,7 +52,6 @@ import {
 } from '@/fixtures/gbp-performance';
 import { failed, loading, ready, unavailable } from '@/lib/state/DataState';
 import { ThemeProvider } from '@/theme';
-import { control } from '@/theme/tokens';
 
 let mockFixtures = false;
 jest.mock('@/lib/env', () => {
@@ -738,84 +737,21 @@ const VIEWPORTS = [
   { name: '412x915', width: 412, height: 915 },
 ] as const;
 
-interface TreeNode {
-  type?: string;
-  props?: Record<string, unknown>;
-  children?: (TreeNode | string)[] | null;
-}
+/*
+ * The QA walker is imported, not copied.
+ *
+ * This file previously carried its own fork. Three forks existed, and all three
+ * repeated the same bug: they read only a NUMERIC hitSlop, so the 36pt-plus-
+ * Rect-hitSlop tabs in components/ui/Tabs.tsx scored as undersized. Fixing the
+ * shared harness left the forks stale and silently wrong.
+ */
+import { auditRenderedTree } from '../../../__tests__/android-qa.test';
 
-function flattenStyle(style: unknown): Record<string, unknown> {
-  if (!style) return {};
-  if (Array.isArray(style)) {
-    return style.reduce<Record<string, unknown>>((acc, s) => ({ ...acc, ...flattenStyle(s) }), {});
-  }
-  if (typeof style === 'object') return style as Record<string, unknown>;
-  return {};
-}
-
-function walk(node: TreeNode | string | null, visit: (n: TreeNode) => void): void {
-  if (!node || typeof node === 'string') return;
-  visit(node);
-  for (const child of node.children ?? []) walk(child, visit);
-}
-
-interface QaReport {
-  overflow: { width: number; testID?: string }[];
-  smallTargets: { height: number; role: string; label?: string }[];
-  unlabelled: { role: string; testID?: string }[];
-  totalPressables: number;
-}
-
-function auditRenderedTree(tree: TreeNode | string | null, viewportWidth: number): QaReport {
-  const report: QaReport = { overflow: [], smallTargets: [], unlabelled: [], totalPressables: 0 };
-
-  walk(tree, (node) => {
-    const props = node.props ?? {};
-    const style = flattenStyle(props.style);
-
-    const width = style.width;
-    if (typeof width === 'number' && width > viewportWidth) {
-      report.overflow.push({
-        width,
-        ...(typeof props.testID === 'string' ? { testID: props.testID } : {}),
-      });
-    }
-
-    const role = props.accessibilityRole;
-    if (role !== 'button' && role !== 'tab' && role !== 'switch') return;
-    report.totalPressables += 1;
-
-    const label = props.accessibilityLabel;
-    if (typeof label !== 'string' || label.trim().length === 0) {
-      report.unlabelled.push({
-        role: String(role),
-        ...(typeof props.testID === 'string' ? { testID: props.testID } : {}),
-      });
-    }
-
-    const declared =
-      typeof style.minHeight === 'number'
-        ? style.minHeight
-        : typeof style.height === 'number'
-          ? style.height
-          : null;
-    // A height that comes from flex or content is not knowable here, and is
-    // reported as neither a pass nor a failure.
-    if (declared === null) return;
-
-    const hitSlop = props.hitSlop;
-    const slop = typeof hitSlop === 'number' ? hitSlop * 2 : 0;
-    if (declared + slop < control.minTouchTarget) {
-      report.smallTargets.push({
-        height: declared,
-        role: String(role),
-        ...(typeof label === 'string' ? { label } : {}),
-      });
-    }
-  });
-
-  return report;
-}
+type TreeNode = NonNullable<Parameters<typeof auditRenderedTree>[0]> extends infer T
+  ? T extends string
+    ? never
+    : T
+  : never;
 
 function wrapAt(width: number, height: number) {
   return renderRouter(
@@ -867,13 +803,18 @@ describe.each(VIEWPORTS)('Performance at $name', ({ width, height }) => {
     // Two segmented controls plus the removed-metrics toggle.
     expect(report.totalPressables).toBeGreaterThan(3);
 
-    // Every control this feature declares meets the floor. The only shortfall
-    // is the segmented control in `components/ui/Tabs.tsx`, whose tab Pressable
-    // declares minHeight 36 — an upstream gap in a SHARED primitive that three
-    // features already use, not something to fork a private copy over. It is
-    // named here rather than papered over.
-    expect(report.smallTargets.every((target) => target.role === 'tab')).toBe(true);
-    expect(report.smallTargets.every((target) => target.height === 36)).toBe(true);
+    /*
+      These were `smallTargets.every(...)`, and `[].every()` is TRUE — so once
+      the Tabs shortfall was actually fixed the assertions kept passing against
+      an empty array, asserting nothing at all. They also still described a
+      shortfall that no longer exists: components/ui/Tabs now carries
+      hitSlop {top:4,bottom:4} over its 36pt minHeight, which is 44pt to a
+      finger.
+
+      Asserting emptiness directly cannot pass vacuously, and prints the
+      offenders when it fails.
+    */
+    expect(report.smallTargets).toEqual([]);
   });
 
   it('fits and stays labelled with nothing connected, too', async () => {

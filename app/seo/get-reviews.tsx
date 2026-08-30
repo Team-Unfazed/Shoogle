@@ -74,6 +74,8 @@ import {
   type ReviewLink,
   type ReviewRequestEntry,
   type WeeklyRequestSummary,
+  readStoredLink,
+  writeStoredLink,
 } from '@/features/gbp/components/getReviews';
 import { classifyVoiceOfMerchant, voiceOfMerchantGate } from '@/features/gbp';
 import { businessFixtureIdentity } from '@/fixtures/business';
@@ -129,9 +131,36 @@ export default function GetReviewsScreen() {
   const [link, setLink] = useState<ReviewLink | null>(() =>
     fixtures === null ? null : reviewLinkForPlaceId(fixtures.placeId),
   );
+  /**
+   * A link the owner pasted previously, but that we could not read back.
+   * Distinct from "no link": they DID save one, so saying there is none would
+   * be wrong and silently overwriting would discard their input.
+   */
+  const [storedLinkCorrupt, setStoredLinkCorrupt] = useState(false);
   const [draft, setDraft] = useState('');
   const [draftError, setDraftError] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  /**
+   * Restore the link the owner pasted on a previous visit.
+   *
+   * Without this the paste survived only as long as the screen: navigating to
+   * the audit and back lost the link and the QR with it. Fixtures win when
+   * present, because the fixture placeId is the demo business rather than this
+   * owner's.
+   */
+  useEffect(() => {
+    if (fixtures !== null) return;
+    let cancelled = false;
+    void readStoredLink(AsyncStorage).then((stored) => {
+      if (cancelled) return;
+      if (stored.kind === 'link') setLink(stored.link);
+      else if (stored.kind === 'corrupt') setStoredLinkCorrupt(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fixtures]);
 
   const handleUseDraft = useCallback(() => {
     const parsed = parsePastedReviewLink(draft);
@@ -142,6 +171,18 @@ export default function GetReviewsScreen() {
     setDraftError(null);
     setLink(parsed.link);
     setDraft('');
+    setStoredLinkCorrupt(false);
+    // Fire-and-report: the link is usable immediately either way, but if it did
+    // not persist the owner must know it will not be here next time.
+    void writeStoredLink(AsyncStorage, parsed.link).then((persisted) => {
+      if (!persisted) {
+        toast.show({
+          message: 'Link saved for now, but this phone would not store it. It may not be here next time.',
+          tone: 'warning',
+          durationMs: 5000,
+        });
+      }
+    });
     toast.show({
       message: parsed.link.opensReviewFormForSure
         ? 'Review link saved. The QR below is that link.'
@@ -409,7 +450,11 @@ export default function GetReviewsScreen() {
         <ReviewLinkCard
           testID="review-link-card"
           link={link}
-          unknownReason={LINK_UNKNOWN_REASON}
+          unknownReason={
+            storedLinkCorrupt
+              ? 'You saved a review link before, but this phone could not read it back. Paste it again below.'
+              : LINK_UNKNOWN_REASON
+          }
           draft={draft}
           onChangeDraft={(value) => {
             setDraft(value);

@@ -73,3 +73,12 @@ export {
   type SendRequestCardProps,
 } from './SendRequestCard';
 export { GoogleRulesCard, HowThisWorksCard } from './GuidanceCards';
+
+export {
+  REVIEW_LINK_STORAGE_KEY,
+  parseStoredLink,
+  readStoredLink,
+  serialiseLink,
+  writeStoredLink,
+  type StoredLinkRead,
+} from './linkStore';
