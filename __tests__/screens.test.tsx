@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 
@@ -6,6 +9,9 @@ import HomeScreen from '@/app/(tabs)/index';
 import PostsScreen from '@/app/(tabs)/posts';
 import SettingsScreen from '@/app/(tabs)/settings';
 import SignInScreen from '@/app/(auth)/sign-in';
+import AuditScreen from '@/app/seo/audit';
+import SearchesScreen from '@/app/seo/searches';
+import VisibilityScreen from '@/app/seo/visibility';
 import { ToastProvider } from '@/components/ui';
 import { SessionProvider } from '@/features/auth/SessionProvider';
 import { clearSignInHandler, registerSignInHandler } from '@/features/auth/handlers';
@@ -59,6 +65,49 @@ function renderScreen(name: string, Component: () => React.JSX.Element) {
       ),
     },
     { initialUrl: `/${name}` },
+  );
+}
+
+/**
+ * The Business tab wired to the REAL destination screens.
+ *
+ * Every route the tab links to is registered here with the actual component
+ * behind it, not a stub - so a link to a route that does not exist, or to one
+ * that cannot render, fails here rather than becoming a dead tap on a phone.
+ * (`typedRoutes` cannot catch it today: `.expo/types` is excluded from
+ * tsconfig, so the generated href union is not in the type check.)
+ */
+const BUSINESS_LINK_TARGETS = {
+  '/seo/audit': 'audit-screen',
+  '/seo/searches': 'searches-screen',
+  '/seo/visibility': 'visibility-screen',
+} as const;
+
+function wrap(Component: () => React.JSX.Element) {
+  function Route() {
+    return (
+      <ThemeProvider forceScheme="light">
+        <SessionProvider>
+          <ToastProvider>
+            <Component />
+          </ToastProvider>
+        </SessionProvider>
+      </ThemeProvider>
+    );
+  }
+  Route.displayName = `Route(${Component.name})`;
+  return Route;
+}
+
+function renderBusinessWithRoutes() {
+  return renderRouter(
+    {
+      business: wrap(BusinessScreen),
+      'seo/audit': wrap(AuditScreen),
+      'seo/searches': wrap(SearchesScreen),
+      'seo/visibility': wrap(VisibilityScreen),
+    },
+    { initialUrl: '/business' },
   );
 }
 
@@ -183,8 +232,9 @@ describe('Business', () => {
     expect(screen.getAllByText('Not measured yet').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('0')).toBeNull();
     expect(screen.queryByText('1,204')).toBeNull();
-    // The rating shows a dash, not a zero.
-    expect(screen.getByText('—')).toBeOnTheScreen();
+    // The rating and the audit score both show a dash, not a zero. An
+    // unmeasured profile is not a profile scoring zero.
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders the designed SEO layout when fixtures are on', async () => {
@@ -194,8 +244,83 @@ describe('Business', () => {
     expect(screen.getByText('Looking good')).toBeOnTheScreen();
     expect(screen.getByText('1,204')).toBeOnTheScreen();
     expect(screen.getByText('4.8')).toBeOnTheScreen();
-    expect(screen.getByText('Search rankings')).toBeOnTheScreen();
+    expect(screen.getByText('What people searched')).toBeOnTheScreen();
     expect(screen.getByTestId('fixture-banner')).toBeOnTheScreen();
+  });
+
+  /**
+   * REGRESSION GUARD — this shipped once and had to be caught by review.
+   *
+   * The fixture carried { key: 'rank', label: 'Avg. rank', value: '#6.4' } and
+   * a rankings: { tracked, improved } block, rendered as a headline number with
+   * a green up-arrow. Google publishes NO rank position through any API — not
+   * rate-limited, not approval-gated, it does not exist. Showing one teaches a
+   * capability that will never arrive.
+   */
+  /**
+   * typedRoutes catches a bad href at compile time, but only for literals it
+   * can see. This asserts the whole set at runtime, so a route deleted or
+   * renamed by another change is caught here rather than by a user landing on
+   * +not-found.
+   */
+  it('every /seo/ link on the tab points at a route that exists', () => {
+    const src = readFileSync(
+      join(process.cwd(), 'app', '(tabs)', 'business.tsx'),
+      'utf8',
+    );
+    const hrefs = [...src.matchAll(/router\.push\('(\/seo\/[a-z-]+)'\)/g)]
+      .map((m) => m[1])
+      .filter((h): h is string => typeof h === 'string');
+
+    // Non-vacuity: the tab must actually link somewhere.
+    expect(hrefs.length).toBeGreaterThanOrEqual(5);
+
+    const missing = [...new Set(hrefs)].filter(
+      (h) => !existsSync(join(process.cwd(), 'app', `${h.replace('/seo/', 'seo/')}.tsx`)),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it('never renders a search rank position', async () => {
+    mockFixtures = true;
+    await renderScreen('business', BusinessScreen);
+
+    expect(screen.queryByText('Avg. rank')).toBeNull();
+    expect(screen.queryByText('#6.4')).toBeNull();
+    // No rank-shaped value anywhere on the screen.
+    expect(screen.queryByText(/^#d/)).toBeNull();
+    // And no "N keywords tracked" count implying ranks are being measured.
+    expect(screen.queryByText(/keywords tracked/i)).toBeNull();
+  });
+
+  it('states plainly that rank is not measurable, rather than "not yet"', async () => {
+    mockFixtures = true;
+    await renderScreen('business', BusinessScreen);
+
+    // The row now describes what it actually does, and the permanent truth
+    // about rank stays in the subtitle rather than being quietly dropped when
+    // the row gained a real destination.
+    expect(screen.getByText('What people searched')).toBeOnTheScreen();
+    expect(screen.getByText(/Google does not publish rank positions/)).toBeOnTheScreen();
+    // "coming soon" would imply there is something to wait for. There is not.
+    expect(screen.queryByText(/coming soon/i)).toBeNull();
+    // And the old title, which implied a position was on its way, is gone.
+    expect(screen.queryByText('Search rankings')).toBeNull();
+  });
+
+  it('shows only metrics Google still exposes', async () => {
+    mockFixtures = true;
+    await renderScreen('business', BusinessScreen);
+
+    // Survived Google's 2023 removals.
+    expect(screen.getByText('Google views')).toBeOnTheScreen();
+    expect(screen.getByText('Calls')).toBeOnTheScreen();
+    expect(screen.getByText('Website taps')).toBeOnTheScreen();
+
+    // Deleted by Google in 2023 with no replacement — must never appear.
+    for (const gone of [/post views/i, /photo views/i, /direct searches/i, /discovery searches/i]) {
+      expect(screen.queryByText(gone)).toBeNull();
+    }
   });
 
   /**
@@ -209,6 +334,106 @@ describe('Business', () => {
     expect(screen.getByText('Looking good')).toBeOnTheScreen();
     expect(screen.queryByText('Connected')).toBeNull();
     expect(screen.getAllByText('Integration not built yet').length).toBeGreaterThan(0);
+  });
+
+  /* ---------------------------------------------------------------------- */
+  /* The tab as a doorway                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  it('summarises the audit rather than leaving the engine unreachable', async () => {
+    mockFixtures = true;
+    await renderScreen('business', BusinessScreen);
+
+    const summary = screen.getByTestId('audit-summary');
+    expect(summary).toBeOnTheScreen();
+    // A summary with no doorway is a dead end, so it is a real button.
+    expect(summary.props.accessibilityRole).toBe('button');
+    // The score comes off the real engine, fed fixture observations.
+    expect(screen.getByTestId('audit-summary-score')).toBeOnTheScreen();
+  });
+
+  /**
+   * UNKNOWN IS NOT ZERO, at tab size too.
+   *
+   * Without a connected provider there is no audit at all. The card must say
+   * so with a dash and "Not measured yet" - never a 0, which an owner could
+   * reasonably read as "my profile scored nothing".
+   */
+  it('shows the audit as unmeasured, not as a zero, when nothing is connected', async () => {
+    mockFixtures = false;
+    await renderScreen('business', BusinessScreen);
+
+    expect(screen.getByTestId('audit-summary')).toBeOnTheScreen();
+    expect(screen.getByLabelText(/Score, not measured yet/)).toBeOnTheScreen();
+    expect(screen.queryByText('0')).toBeNull();
+    expect(screen.queryByText('0%')).toBeNull();
+    expect(screen.queryByText('/ 100')).toBeNull();
+  });
+
+  it('opens the full audit report from the summary card', async () => {
+    mockFixtures = true;
+    await renderBusinessWithRoutes();
+
+    await fireEvent.press(screen.getByTestId('audit-summary'));
+
+    await waitFor(() => expect(screen.getByTestId('audit-screen')).toBeOnTheScreen());
+  });
+
+  /**
+   * Every link on the tab must land on a route that exists.
+   *
+   * The destinations are registered with their REAL components, so a renamed
+   * file, a deleted route or a screen that cannot render fails here. A broken
+   * link is worse than an honest "not built yet" toast, which is what every
+   * other row still does.
+   */
+  it.each([
+    ['the audit summary', 'audit-summary', BUSINESS_LINK_TARGETS['/seo/audit']],
+    ['What people searched', 'What people searched', BUSINESS_LINK_TARGETS['/seo/searches']],
+    ['How you look to AI', 'How you look to AI', BUSINESS_LINK_TARGETS['/seo/visibility']],
+  ])('links %s to a route that exists', async (_name, locator, expectedTestId) => {
+    mockFixtures = true;
+    await renderBusinessWithRoutes();
+
+    // The card is found by testID; the rows by their visible title, pressed
+    // through to the row they sit in.
+    const control =
+      locator === 'audit-summary'
+        ? screen.getByTestId(locator)
+        : screen.getByText(locator);
+    await fireEvent.press(control);
+
+    await waitFor(() => expect(screen.getByTestId(expectedTestId)).toBeOnTheScreen());
+  });
+
+  /**
+   * NO DEAD CONTROLS. Rows with no screen behind them must say so out loud
+   * rather than doing nothing, and must NOT be linked to an invented route.
+   */
+  /*
+   * Only two rows remain unbuilt, and both are unbuilt because they belong to
+   * ANOTHER ENGINEER, not because the work is pending here:
+   *
+   *   Google Business posts — 'google_business' is already a ProviderId that
+   *     Yash's SocialPublisher targets. A second composer would give post
+   *     status two sources of truth.
+   *   Website — app/website/ is Devashish's and does not exist. typedRoutes
+   *     would reject the href, and a broken link is worse than an honest toast.
+   *
+   * "Business profile" left this list when app/seo/profile.tsx shipped. If a
+   * row ever goes back to toasting, that is a regression, not a state to add
+   * here.
+   */
+  it.each([
+    ['Google Business posts', 'Google Business posts is not built yet.'],
+    ['Website', 'The website module is not built yet.'],
+  ])('answers the %s row instead of silently doing nothing', async (title, message) => {
+    mockFixtures = true;
+    await renderScreen('business', BusinessScreen);
+
+    await fireEvent.press(screen.getByText(title));
+
+    expect(await screen.findByText(message)).toBeOnTheScreen();
   });
 });
 

@@ -42,3 +42,48 @@ requirements.
 
 - `KeywordRanking.position` is `number | null`. `null` means not ranked or
   not measured, and must render as words - never as position 0 or position 100.
+
+## What is built (2026-08-30)
+
+Nothing here needs a credential, a billing account or the Google Business
+Profile quota. Nothing here is registered with `registerProvider()` — `SeoProvider`
+is not a `ConnectableProvider`, so importing this feature claims no integration.
+
+| Module | What it is |
+|---|---|
+| `types.ts` | The eleven live `DailyMetric` values, the removed-metric ids, `SearchKeywordsReport`, `SeoFinding` (re-exports the keyword union from `keywords.ts`) |
+| `keywords.ts` | **The** `KeywordImpressions` union (exact-or-bound) plus constructors, wire parsing and the ONLY sanctioned formatter — `"1,240"` or `"<15"`. Declared once, repo-wide: `features/gbp` and `features/audit` import it from `@/features/seo` rather than keeping their own copies. The exact member is spelled `value`. |
+| `metrics.ts` | `LIVE_DAILY_METRICS` (11), `REMOVED_METRICS` (12, permanently `not_supported`), `RENAMED_METRICS`, and `toMetrics()` which OMITS unknown values |
+| `provider.ts` | `seoProvider` — rankings are permanently `not_supported` |
+| `ai/contract.ts` | `AiProvider`, the data-classification envelope, and `noAiProvider` (what production gets) |
+| `ai/gemini.ts` | Development-only client. Dev-gated, fixture-data-only (the `[FIXTURE]` marker is checked on `input.payload`, never on the rendered prompt), key never `EXPO_PUBLIC_` |
+| `ai/visibility.ts` | The AI Visibility Check — one fetch, no model, no score |
+| `ai/schema.ts` | `LocalBusiness` JSON-LD for the seven verticals, plus inspection of markup already on a site |
+| `ai/directories.ts` | The India directory checklist — owner-answered, counts not percentages |
+| `ai/readability.ts` | Readability observations with cited reasons. No score, by design |
+
+### Three facts that must stay distinguishable
+
+| Fact | How it is represented |
+|---|---|
+| We could not ask | `unavailable(reason, message)` |
+| We asked, the answer was none | `{ kind: 'exact', value: 0 }` / `Metric.value === 0` |
+| We asked, the answer was a bound | `{ kind: 'below_threshold', threshold }` → renders `<15` |
+
+### Consumed by other features
+
+- `buildLocalBusinessSchema()` / `serializeLocalBusinessSchema()` are exported for
+  **Devashish** to use in `features/website/`. Pranay owns the generator; it must
+  never write into that folder.
+- `toMetrics()` and `LIVE_DAILY_METRICS` are exported for `features/gbp` to use
+  when implementing `getPerformance()`.
+
+### Not built, and why
+
+- **Rank position.** No Google API returns one. `getRankings()` is
+  `not_supported` and `KeywordRanking.position` stays `null`.
+- **Anything the free Gemini tier cannot legally see.** Real customer data needs
+  a server-side proxy (Sunny). Until it exists, production gets `noAiProvider`.
+- **NAP consistency across directories, "Ask an AI", live Google ratings.** All
+  need a Maps Platform billing account or an edge function. See the blockers in
+  `docs/research/ai-search-visibility.md` §7.

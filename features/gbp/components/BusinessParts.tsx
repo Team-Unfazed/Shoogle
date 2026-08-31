@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/ui';
 import { useTheme } from '@/theme';
-import type { AccentName } from '@/theme/tokens';
+import { control, type AccentName } from '@/theme/tokens';
 
 /**
  * Business tab composition pieces. Feature owner: Pranay.
@@ -171,21 +171,32 @@ export function GridMetric({
 export function RatingRow({
   rating,
   total,
-  unanswered,
   onPress,
 }: {
   /** Null when no rating has been retrieved. */
   rating: number | null;
+  /**
+   * Total review count, or null when unknown.
+   *
+   * There is deliberately NO `unanswered` count here. Whether the GBP review
+   * resource's `reply` field reflects replies posted outside Shoogle is not
+   * established, so "N unanswered" cannot be honestly measured today. A wrong
+   * zero there tells an owner they have nothing to answer when they might —
+   * so the number is omitted entirely rather than defaulted.
+   */
   total: number | null;
-  unanswered: number;
   onPress: () => void;
 }) {
   const theme = useTheme();
   const known = rating !== null;
 
+  // Never `total ?? 0`: "0 total" beside a known star rating is impossible, and
+  // an unknown count is not a count of zero.
   const subtitle = !known
     ? 'Not connected'
-    : `${unanswered > 0 ? `${unanswered} unanswered · ` : ''}${total ?? 0} total`;
+    : total !== null
+      ? `${total.toLocaleString('en-IN')} reviews`
+      : 'Review count unavailable';
 
   return (
     <Pressable
@@ -221,12 +232,8 @@ export function RatingRow({
         </Text>
         <Text
           variant="caption"
-          tone={unanswered > 0 && known ? 'amber' : 'muted'}
-          style={{
-            fontSize: 12.5,
-            marginTop: 3,
-            fontFamily: unanswered > 0 && known ? theme.fontFamily.semibold : theme.fontFamily.regular,
-          }}>
+          tone={known && total === null ? 'muted2' : 'muted'}
+          style={{ fontSize: 12.5, marginTop: 3 }}>
           {subtitle}
         </Text>
       </View>
@@ -370,7 +377,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
 
+  /**
+   * `minHeight` is not what makes this row tall — the 44pt tile plus 16pt of
+   * padding above and below already do, at 76pt. It is here so the height is
+   * DECLARED: the Android QA walker can only check a target it can read, and
+   * every one of the Business tab's navigation rows was previously reported as
+   * UNDETERMINED, which is not a pass. Stating the floor turns eleven unchecked
+   * controls into eleven checked ones and changes nothing on screen.
+   */
   navRow: {
+    minHeight: control.minTouchTarget,
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
@@ -387,5 +403,13 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
   },
 
-  advice: { flexDirection: 'row', alignItems: 'flex-start', borderRadius: 16, padding: 14 },
+  // Same reason as `navRow`: declared so the 44pt floor is verifiable, not to
+  // change the layout. One line of 20pt text inside 14pt padding is 48pt.
+  advice: {
+    minHeight: control.minTouchTarget,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 16,
+    padding: 14,
+  },
 });
