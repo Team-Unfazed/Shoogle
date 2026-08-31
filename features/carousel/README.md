@@ -43,3 +43,25 @@ requirements.
 - Render text as real `<Text>` nodes wherever it is UI. Only burn text into an
   image when the exported artwork itself requires it - dashboard text must never
   be drawn onto a canvas, because it stops being readable by TalkBack.
+
+---
+
+## What exists today (day 1)
+
+| File | What it is |
+|---|---|
+| `types.ts` | `Carousel`, `CarouselSlide`, `SlideContent`, aspects, Shoogle's own slide floor/ceiling |
+| `ordering.ts` | The only sanctioned way to move, add, insert or remove a slide. All pure |
+| `validation.ts` | Shoogle's own rules, plus the platforms' — which are all unverified |
+
+### Notes
+
+- **Generation state and edit state are separate fields.** "A model wrote this
+  and the owner has since changed it" is a real state, and one enum cannot say
+  it. Keeping them apart is what lets "regenerate" avoid discarding edits.
+- **Order is the array.** There is no `index` field to drift out of sync.
+- **`reviewCarousel(...).ok` is not a claim about the platform.** It means
+  Shoogle found no fault. The platform checks land in `unchecked` until the
+  research in `features/social/platforms.ts` is done, and the editor must show
+  that rather than a bare green tick.
+- Slide copy is real `<Text>`, never burned into a bitmap — see above.

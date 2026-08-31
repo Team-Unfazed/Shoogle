@@ -47,3 +47,45 @@ requirements.
   toast is a false claim.
 - Instagram publishing requires a Business/Creator account linked to a Facebook
   Page, plus app review. Verify current requirements before building the UI.
+
+---
+
+## What exists today (day 1)
+
+The domain foundation, with no integration behind it. Nothing publishes.
+
+| File | What it is |
+|---|---|
+| `types.ts` | `Platform`, `Caption`, `MediaAsset`, `Schedule`, `PublishTarget`, `PostInsights`, `SocialPost` |
+| `postState.ts` | The lifecycle state machine — a transition TABLE, not `if` statements |
+| `captions.ts` | Caption construction, hashtags, code-point length, provenance, review |
+| `platforms.ts` | The platform capability matrix. **Every limit is `null` / UNVERIFIED** |
+| `scheduling.ts` | Shoogle-owned scheduling rules and the runner contract |
+| `time.ts` | Timezone-correct schedule labels, in the business's zone |
+| `generator.ts` | `SocialContentGenerator` — the seam. No model SDK is imported |
+| `publisher.ts` | `SocialPublisher` + `attemptPublish`. Refuses to act with no adapter |
+| `store.ts` | `PostStore`. Real one is Supabase, which is Sunny's |
+| `view.ts` / `usePostsView.ts` | `SocialPost[]` -> what the Posts tab renders |
+
+### Three things that must not change without a reason
+
+1. **`PLATFORM_CAPABILITIES` stays unverified until researched.** Caption
+   lengths, accepted formats and slide counts are claims about someone else's
+   API. `assumesFormatAccepted()` is asserted to be `false`; filling any of it
+   in from memory rather than from `docs/research/` breaks that test, which is
+   the intended outcome.
+2. **No `registerProvider()` call for Instagram, Facebook or LinkedIn.** The
+   Business tab shows "Integration not built yet" precisely while they are
+   unregistered. Register the day `connect()` completes a real OAuth flow.
+3. **`schedule()` refuses while no platform adapter exists.** Storing a due
+   date with no publisher and no runner behind it would show the owner posts
+   that can never go out.
+
+### Blocked on
+
+- **Meta / LinkedIn API research** — nothing in `docs/research/` covers them,
+  so no limit in `platforms.ts` can be filled in.
+- **A durable post store and a server-side runner** (Sunny). A phone that is
+  asleep cannot publish, so on-device timers are not an option.
+- **A generation endpoint and an approved model tier.** A generation key must
+  never be `EXPO_PUBLIC_*` — it would ship inside the APK.
