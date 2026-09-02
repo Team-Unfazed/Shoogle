@@ -11,7 +11,7 @@ import {
   SettingsGroup,
   SettingsRow,
   SettingsToggle,
-} from '@/features/dashboard/components/SettingsParts';
+} from '@/features/dashboard';
 import { settingsFixture } from '@/fixtures/settings';
 import { isFixtureModeEnabled, missingRequiredEnvNames } from '@/lib/env';
 import { useTheme } from '@/theme';
