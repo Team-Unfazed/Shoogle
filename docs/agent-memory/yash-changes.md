@@ -152,3 +152,112 @@ Schedule as the primary action and "Post now" secondary.
 - No `registerProvider()` for a provider that cannot complete a real OAuth flow.
 - Fixtures stay dev-gated and bannered; `fixtures/posts.ts` records are
   `isFixture: true`.
+
+---
+
+## 2026-09-08 — Phase 0: Instagram research committed, capability matrix filled
+
+### What landed
+
+**1. `docs/research/meta-instagram.md`** — the Meta/Instagram publishing report.
+The research pass ran on 2026-09-01 but its findings were never written to a
+file, so they survived only inside `docs/social-publishing-handoff.md` §5. They
+are now in `docs/research/` where the rest of the team looks, and
+`docs/research/README.md` lists the report and the finding that changes the
+build.
+
+Before committing a single number I **re-fetched every cited Meta page** and
+confirmed the quoted sentence was still on it. That was not ceremony: four of
+these numbers are about to become executable validation, and a citation nobody
+has opened is not a citation. Two lines could not be re-confirmed (the
+"one successful API call before App Review" rule and the screencast/installable-
+build requirement) and are labelled **NOT RE-CONFIRMED** in the report rather
+than quietly promoted to fact.
+
+**2. `SOCIAL_PLATFORMS` narrowed to `['instagram', 'google_business']`.**
+LinkedIn left scope on 2026-09-01 and Facebook was never a publishing target.
+Both remain valid `ProviderId`s — listing them as unconnected accounts in the
+Business tab is *truthful* — but a platform Shoogle can never publish to does
+not belong in an array that every capability check, target picker and publisher
+loop iterates.
+
+**3. `PLATFORM_CAPABILITIES` filled in, partially and visibly so.**
+
+| Platform | Verified | Still `unverified()`, on purpose |
+|---|---|---|
+| Instagram | caption 2200 · hashtags 30 · images `['jpeg']` · video `['mp4','mov']` · carousel max 10 · `requiresAppReview` | carousel **min** · `providerSideScheduling` |
+| Google Business | `providerSideScheduling: true` · `requiresAppReview` | `summary` length · hashtags · image + video formats · carousel bounds |
+
+Each verified entry carries the Meta or Google URL the number came from.
+
+### The decision worth recording: what to do with `assumesFormatAccepted()`
+
+Day 1 shipped a guard asserting that **no** platform had a verified format list,
+so that "PNG is probably fine" could never quietly become true. Filling in
+Instagram's formats makes that guard fail — correctly, by its own design.
+
+The wrong fix was to keep the test green by not writing Meta's documented
+answer down. The guard was aimed at *being unresearched*, which is a temporary
+state and not actually the thing worth protecting. So it was replaced by
+`unsourcedLimits()`, which returns every limit claimed as verified **without a
+first-party source** and is asserted to be empty. That claim never expires:
+"I think it's 2200" still fails it, and a line quoting Meta still passes. The
+guard got stronger by getting narrower.
+
+`honesty.test.ts` was rewritten along the same line. It no longer asserts that
+everything is unknown; it asserts that what is known is sourced and enforced,
+and that what is unknown still answers `'unverified'` rather than `'ok'`.
+
+### The PNG rule is now executable
+
+> "JPEG is the only image format supported."
+
+`checkMediaFormat('instagram', 'png')` was `'unverified'`. It is now a
+`'violation'` carrying an owner-facing sentence, and the carousel review
+surfaces it as blocking. WEBP and HEIC — both of which an Android picker
+happily hands you — are violations too.
+
+**This makes a server-side JPEG transcode a build requirement, not a nicety.**
+Meta cURLs media from a public URL, so validating on the phone is not enough;
+the file Meta fetches is the server's.
+
+### The best test in this change
+
+`features/carousel/__tests__/carousel.test.ts` now asserts, on a single review:
+a PNG slide is a **blocking violation** for Instagram, **and** Instagram still
+appears in `unchecked` — because Meta documents no carousel *minimum*, so the
+slide-count check could not run. "We checked some of it" is the honest answer
+and both halves have to render. A green tick there would be a lie about the
+part nobody checked.
+
+The GBP row is the other half of the same point: Google documents
+`scheduledTime`, so provider-side scheduling is verified **true** — genuinely
+different from Instagram — but documents no `summary` character limit, so
+Shoogle refuses to claim one and will let Google's API reject an over-long post
+with its own error rather than truncating on a guess.
+
+### Verification
+
+`npm run typecheck` clean · `npm run lint` clean · **2,355 tests / 50 suites
+passing** (2,342 before; 13 net new). Baseline re-confirmed at `0732ad4` before
+any edit.
+
+### Still true, and worth repeating
+
+**No Instagram post has ever been published by this code.** No Meta app exists,
+no credential is in this repo, and `registerProvider('instagram', …)` is still
+not called. Filling in a capability matrix is knowing the rules, not having an
+integration.
+
+### Next step
+
+Phase 1 is blocked on two things, one of them a person:
+
+1. **The Meta Developer App** (product owner, ~15 min in a browser) — Instagram
+   product → **"API setup with Instagram login"**, NOT Facebook login.
+2. **The server-side boundary decision.** Instagram token exchange needs
+   `client_secret`, which cannot ship in an APK. Until that is settled, connect
+   is not buildable at all.
+
+Buildable meanwhile with no credentials: the `InstagramContent` type and format
+union, and the compose flow against dev-gated fixtures.

@@ -59,7 +59,7 @@ The domain foundation, with no integration behind it. Nothing publishes.
 | `types.ts` | `Platform`, `Caption`, `MediaAsset`, `Schedule`, `PublishTarget`, `PostInsights`, `SocialPost` |
 | `postState.ts` | The lifecycle state machine — a transition TABLE, not `if` statements |
 | `captions.ts` | Caption construction, hashtags, code-point length, provenance, review |
-| `platforms.ts` | The platform capability matrix. **Every limit is `null` / UNVERIFIED** |
+| `platforms.ts` | The platform capability matrix. Instagram is researched; several limits are still UNVERIFIED and say so |
 | `scheduling.ts` | Shoogle-owned scheduling rules and the runner contract |
 | `time.ts` | Timezone-correct schedule labels, in the business's zone |
 | `generator.ts` | `SocialContentGenerator` — the seam. No model SDK is imported |
@@ -69,22 +69,34 @@ The domain foundation, with no integration behind it. Nothing publishes.
 
 ### Three things that must not change without a reason
 
-1. **`PLATFORM_CAPABILITIES` stays unverified until researched.** Caption
-   lengths, accepted formats and slide counts are claims about someone else's
-   API. `assumesFormatAccepted()` is asserted to be `false`; filling any of it
-   in from memory rather than from `docs/research/` breaks that test, which is
-   the intended outcome.
-2. **No `registerProvider()` call for Instagram, Facebook or LinkedIn.** The
-   Business tab shows "Integration not built yet" precisely while they are
-   unregistered. Register the day `connect()` completes a real OAuth flow.
+1. **A limit in `PLATFORM_CAPABILITIES` may only be claimed with a source.**
+   Caption lengths, accepted formats and slide counts are claims about someone
+   else's API. Instagram's are now filled in from
+   `docs/research/meta-instagram.md`, each carrying the Meta URL it came from —
+   and the ones Meta does not document (carousel *minimum*, provider-side
+   scheduling) stay `unverified()` rather than being guessed. `unsourcedLimits()`
+   is asserted to be empty, so a number written from memory breaks the build,
+   which is the intended outcome.
+2. **No `registerProvider()` call for Instagram.** The Business tab shows
+   "Integration not built yet" precisely while it is unregistered. Register the
+   day `connect()` completes a real OAuth flow.
 3. **`schedule()` refuses while no platform adapter exists.** Storing a due
    date with no publisher and no runner behind it would show the owner posts
    that can never go out.
 
+### Scope
+
+**Instagram and Google Business Profile only.** LinkedIn was removed from scope
+on 2026-09-01 and Facebook is not a publishing target; both remain valid
+`ProviderId`s because listing them as unconnected accounts is truthful, but
+neither is in `SOCIAL_PLATFORMS`.
+
 ### Blocked on
 
-- **Meta / LinkedIn API research** — nothing in `docs/research/` covers them,
-  so no limit in `platforms.ts` can be filled in.
+- **A server.** Instagram token exchange needs `client_secret`, Meta and Google
+  both fetch media from a public URL, and Instagram requires JPEG — so a
+  transcode + hosting step is mandatory. See `docs/research/meta-instagram.md`
+  §7.
 - **A durable post store and a server-side runner** (Sunny). A phone that is
   asleep cannot publish, so on-device timers are not an option.
 - **A generation endpoint and an approved model tier.** A generation key must

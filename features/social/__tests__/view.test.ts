@@ -63,8 +63,12 @@ describe('the posts view', () => {
   });
 
   it('names multiple targets short-form', () => {
-    const view = buildPostsView([scheduled('a', '2026-09-01T03:30:00.000Z', ['instagram', 'facebook'])], IST, NOW);
-    expect(view.scheduled[0]?.where).toBe('IG + FB');
+    const view = buildPostsView(
+      [scheduled('a', '2026-09-01T03:30:00.000Z', ['instagram', 'google_business'])],
+      IST,
+      NOW,
+    );
+    expect(view.scheduled[0]?.where).toBe('IG + GBP');
   });
 
   /* -- Unknown is not zero ------------------------------------------------ */

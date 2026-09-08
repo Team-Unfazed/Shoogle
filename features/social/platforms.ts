@@ -3,27 +3,38 @@
  *
  * ===================== READ THIS BEFORE ADDING A NUMBER =====================
  *
- * EVERY LIMIT IN THIS FILE IS CURRENTLY `null` / UNVERIFIED, ON PURPOSE.
+ * Every limit here is a claim about someone else's API. Writing "Instagram
+ * allows 2,200 characters" from memory would be inventing a limit, which the
+ * engineering contract forbids and which fails in the worst possible way:
+ * silently, at publish time, on a real customer's post.
  *
- * Caption lengths, hashtag counts, accepted image formats, carousel slide
- * counts, whether a platform will schedule for you, whether app review is
- * required — all of it is a claim about someone else's API. `docs/research/`
- * contains no Meta or LinkedIn report yet, so this feature knows none of it.
+ * So a limit may only leave `unverified()` by way of `verified(value, source)`,
+ * whose second argument is a first-party documentation URL. There is
+ * deliberately no third constructor and no "probably" state.
  *
- * Writing "Instagram allows 2,200 characters" here from memory would be
- * inventing a limit, which the engineering contract forbids and which fails in
- * the worst possible way: silently, at publish time, on a real customer's post.
+ * WHAT IS FILLED IN, AND WHAT IS NOT
+ * ----------------------------------
+ *   instagram        — filled from `docs/research/meta-instagram.md` §4/§5.
+ *                      Carousel MINIMUM and provider-side scheduling remain
+ *                      unverified: Meta documents neither, and "the docs don't
+ *                      mention it" is not a citation.
+ *   google_business  — only what `docs/research/google-business-profile.md` §6
+ *                      actually states. `scheduledTime` is documented, so
+ *                      provider-side scheduling is verified TRUE. The summary
+ *                      character limit is NOT documented, so it stays null and
+ *                      the API is left to reject an over-long post with its own
+ *                      error rather than Shoogle truncating on a guess.
  *
- * HOW TO FILL THIS IN
- * -------------------
+ * HOW TO FILL IN THE REST
+ * -----------------------
  *   1. Run the `api-researcher` agent for the platform.
  *   2. Commit its report to `docs/research/<platform>.md`.
  *   3. Replace the `unverified()` entry with `verified(value, '<doc URL>')`.
  *   4. Add a test asserting the new value, so it cannot be edited silently.
  *
- * Until then `checkAgainstPlatform()` answers `'unverified'` rather than 'ok',
- * and the UI must say "we cannot confirm this will be accepted" rather than
- * showing a green tick. An unverified check is NOT a pass.
+ * While a limit is unverified the matching check answers `'unverified'` rather
+ * than `'ok'`, and the UI must say "we cannot confirm this will be accepted"
+ * rather than showing a green tick. An unverified check is NOT a pass.
  */
 
 import { IMAGE_FORMATS, VIDEO_FORMATS, type MediaFormat, type Platform } from './types';
@@ -85,25 +96,120 @@ export interface PlatformCapabilities {
   requiresAppReview: Limit<boolean>;
 }
 
-function allUnverified(platform: Platform): PlatformCapabilities {
-  return {
-    platform,
-    captionMaxCharacters: unverified(),
-    hashtagMaxCount: unverified(),
-    acceptedImageFormats: unverified(),
-    acceptedVideoFormats: unverified(),
-    carouselMinSlides: unverified(),
-    carouselMaxSlides: unverified(),
-    providerSideScheduling: unverified(),
-    requiresAppReview: unverified(),
-  };
-}
+/* -- Sources. Named so a reader can see which page a number came from. ----- */
+
+/** Meta, *Content Publishing*. JPEG-only, carousel max, the 100/24h quota. */
+const IG_CONTENT_PUBLISHING =
+  'https://developers.facebook.com/docs/instagram-platform/content-publishing';
+
+/**
+ * Meta, *IG User Media* reference. Caption 2200/30/20 and the media specs.
+ *
+ * ⚠️ This page lives in the `instagram-graph-api` (Facebook Login) reference
+ * tree. Shoogle uses the Instagram Login path, for which no equivalent
+ * specification page exists. The endpoints and ingestion pipeline are the same
+ * and there is no reason to think the specs differ — but the citation points at
+ * the page the numbers are actually on, not at a more convenient one. Recorded
+ * as an open item in `docs/research/meta-instagram.md` §8.
+ */
+const IG_MEDIA_REFERENCE =
+  'https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media';
+
+/** Meta, *Access Levels*. Advanced Access — i.e. real customers — is gated. */
+const IG_ACCESS_LEVELS = 'https://developers.facebook.com/docs/graph-api/overview/access-levels';
+
+/** Google, *accounts.locations.localPosts* v4 reference. `scheduledTime`. */
+const GBP_LOCAL_POSTS =
+  'https://developers.google.com/my-business/reference/rest/v4/accounts.locations.localPosts';
+
+/** Google, *GBP API prerequisites*. A project sits at 0 QPM until approved. */
+const GBP_PREREQS = 'https://developers.google.com/my-business/content/prereqs';
 
 export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapabilities> = {
-  instagram: allUnverified('instagram'),
-  facebook: allUnverified('facebook'),
-  linkedin: allUnverified('linkedin'),
-  google_business: allUnverified('google_business'),
+  /**
+   * Instagram — via Meta's *Instagram API with Instagram Login*.
+   * See `docs/research/meta-instagram.md`.
+   */
+  instagram: {
+    platform: 'instagram',
+    // "Maximum 2200 characters, 30 hashtags, and 20 @ tags."
+    captionMaxCharacters: verified(2200, IG_MEDIA_REFERENCE),
+    hashtagMaxCount: verified(30, IG_MEDIA_REFERENCE),
+    /**
+     * "JPEG is the only image format supported. Extended JPEG formats such as
+     * MPO and JPS are not supported."
+     *
+     * This one line is why `checkMediaFormat('instagram', 'png')` is a real
+     * violation rather than a shrug, and why a server-side JPEG transcode is a
+     * build requirement rather than a nicety.
+     */
+    acceptedImageFormats: verified(['jpeg'], IG_CONTENT_PUBLISHING),
+    // "MOV or MP4 (MPEG-4 Part 14), no edit lists, moov atom at the front"
+    acceptedVideoFormats: verified(['mp4', 'mov'], IG_MEDIA_REFERENCE),
+    /**
+     * UNVERIFIED on purpose. Meta documents a maximum of 10 and states no
+     * minimum anywhere. Two is near-certain and `features/carousel` enforces
+     * Shoogle's own `SHOOGLE_MIN_SLIDES = 2` — but that is a Shoogle rule and
+     * must not be presented as Instagram's.
+     */
+    carouselMinSlides: unverified(),
+    // "Carousels are limited to 10 images, videos, or a mix of the two."
+    carouselMaxSlides: verified(10, IG_CONTENT_PUBLISHING),
+    /**
+     * UNVERIFIED on purpose. The documented flow is container → publish with no
+     * scheduled-time parameter — but the absence of a parameter in the docs is
+     * not a citation that scheduling is unsupported, and this codebase does not
+     * record absence as fact. Practically it changes nothing: `scheduling.ts`
+     * already assumes Shoogle owns the clock.
+     */
+    providerSideScheduling: unverified(),
+    /**
+     * True. Standard Access publishes only for accounts holding a role on our
+     * app; "Business Verification is required to get Advanced Access", and
+     * Advanced Access is what real customers need.
+     */
+    requiresAppReview: verified(true, IG_ACCESS_LEVELS),
+  },
+
+  /**
+   * Google Business Profile local posts.
+   * See `docs/research/google-business-profile.md` §6.
+   */
+  google_business: {
+    platform: 'google_business',
+    /**
+     * UNVERIFIED on purpose. The `LocalPost` reference states no character
+     * limit for `summary`. Do not hard-code one and do not silently truncate —
+     * let the API reject an over-long post and surface Google's own error.
+     */
+    captionMaxCharacters: unverified(),
+    /** Not a GBP concept in the reference, and undocumented. Not guessed. */
+    hashtagMaxCount: unverified(),
+    /**
+     * UNVERIFIED. §8 of the GBP research documents a minimum photo size
+     * (250 px short edge, 10 KB) but no accepted-format list. A size floor is
+     * not a format list, so this stays null.
+     */
+    acceptedImageFormats: unverified(),
+    acceptedVideoFormats: unverified(),
+    /** A local post is not a carousel. Neither bound is documented. */
+    carouselMinSlides: unverified(),
+    carouselMaxSlides: unverified(),
+    /**
+     * TRUE, and genuinely different from Instagram: `LocalPost.scheduledTime`
+     * is a documented field. GBP scheduling is real API scheduling, not Shoogle
+     * simulating it, so the GBP publisher can hand the clock over.
+     */
+    providerSideScheduling: verified(true, GBP_LOCAL_POSTS),
+    /**
+     * TRUE by a different mechanism than Meta's. Google does not review an
+     * "app" in the app-store sense; it reviews an **API access request**, and
+     * an unapproved Cloud project sits at 0 QPM — it cannot publish at all.
+     * The owner-facing consequence is identical, which is what this flag is
+     * for, so it is recorded as true and the mechanism noted here.
+     */
+    requiresAppReview: verified(true, GBP_PREREQS),
+  },
 };
 
 export function capabilitiesFor(platform: Platform): PlatformCapabilities {
@@ -161,8 +267,6 @@ function unverifiedResult(what: string, platform: Platform): CheckResult {
 
 const PLATFORM_RESEARCH_NAME: Record<Platform, string> = {
   instagram: 'Instagram',
-  facebook: 'Facebook',
-  linkedin: 'LinkedIn',
   google_business: 'Google Business Profile',
 };
 
@@ -230,14 +334,35 @@ export function checkSlideCount(platform: Platform, slides: number): CheckResult
 }
 
 /**
- * Does Shoogle currently assume ANY platform will accept a given format?
- * Hard-wired to false, and asserted by a test, so that "we assumed PNG was
- * fine" can never quietly become true again.
+ * Every limit currently claimed as verified WITHOUT a first-party source,
+ * described as `"<platform>.<field>"`. A test asserts this list is empty.
+ *
+ * WHY THIS REPLACED `assumesFormatAccepted()`
+ * -------------------------------------------
+ * On Day 1 the guard was "no format list is verified at all", which was easy to
+ * assert because nothing in this file was researched. That guard has now done
+ * its job and expired: Instagram's accepted formats ARE known, cited to Meta's
+ * own documentation, and asserting they are still unknown would mean deleting
+ * a true fact to keep a test green.
+ *
+ * The claim actually worth guarding forever is the one underneath it — that
+ * nobody writes a limit down without saying where it came from. "PNG is
+ * probably fine" and "I think it's 2200" both fail this check; a line quoting
+ * Meta does not. `verified()` already requires a source at the call site, so
+ * this catches the object literal that skips the constructor.
  */
-export function assumesFormatAccepted(): boolean {
-  return Object.values(PLATFORM_CAPABILITIES).some(
-    (caps) => isVerified(caps.acceptedImageFormats) || isVerified(caps.acceptedVideoFormats),
-  );
+export function unsourcedLimits(): string[] {
+  const offenders: string[] = [];
+  for (const caps of Object.values(PLATFORM_CAPABILITIES)) {
+    for (const [field, limit] of Object.entries(caps)) {
+      if (field === 'platform') continue;
+      const claim = limit as Limit<unknown>;
+      if (claim.verification === 'verified' && (claim.source === null || claim.source === '')) {
+        offenders.push(`${caps.platform}.${field}`);
+      }
+    }
+  }
+  return offenders;
 }
 
 /** Formats Shoogle can even identify. Used by the picker, not by validation. */

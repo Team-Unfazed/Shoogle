@@ -18,13 +18,14 @@ confirms it. Never treat an `UNVERIFIED` line as settled.
 | Report | Covers | Verdict |
 |---|---|---|
 | [`google-business-profile.md`](./google-business-profile.md) | The full GBP API family: endpoints, the single OAuth scope, the access-request gate, verification gating, reviews, local posts, media, performance metrics, quotas, pricing | **VIABLE WITH CONDITIONS** |
+| [`meta-instagram.md`](./meta-instagram.md) | Instagram publishing: Instagram Login vs Facebook Login, OAuth and token exchange, the container→publish flow, formats and limits, access levels and App Review, scheduling | **VIABLE** — no Facebook Page needed, but needs a server |
 | [`local-seo-methodology.md`](./local-seo-methodology.md) | The audit check registry (Areas A–I), scoring and the coverage gate, severity and ordering, and the geo-grid / maps build decision | Methodology, not a provider |
 | [`ai-search-visibility.md`](./ai-search-visibility.md) | Being cited by AI answers, schema.org for Indian local verticals, NAP consistency, what is and is not measurable | Mixed — see §7A vs §7B |
 | [`competitive-grexa.md`](./competitive-grexa.md) | Grexa AI teardown: features, onboarding, pricing, user complaints, and where Shoogle can win | Competitive, not a provider |
 
 ---
 
-## The three findings that change what gets built
+## The findings that change what gets built
 
 1. **Google exposes no search rank position via any API.** Not rate-limited, not
    approval-gated — it does not exist. `SeoProvider.getRankings()` returns
@@ -41,14 +42,22 @@ confirms it. Never treat an `UNVERIFIED` line as settled.
    metrics are gone with no replacement. They must render
    `unavailable('not_supported')` **forever** — never `0`, never "coming soon".
 
+4. **Instagram publishing needs no Facebook Page** — but it does need a server.
+   Meta's *Instagram API with Instagram Login* states outright that a linked Page
+   is not required, which removes this feature's biggest assumed blocker. In its
+   place come three requirements that no app-side code works around: Meta
+   **cURLs media from a public URL** (a device-local photo cannot be published),
+   **JPEG is the only accepted image format** (PNG is rejected), and token
+   exchange needs `client_secret` and therefore **cannot complete on-device**.
+   All three land on the same missing backend.
+
 ---
 
 ## Still unresearched
 
 | Integration | Owner | Why it needs research first |
 |---|---|---|
-| Instagram / Meta Graph | Yash | Publishing requires app review and a Business/Creator account linked to a Page |
-| LinkedIn | Yash | Posting permissions are gated by partner-programme access |
+| LinkedIn | Yash | Out of scope since 2026-09-01 — kept here only because the row predates that decision |
 | Razorpay | Aryan | Interacts with Google Play billing policy |
 | Gemini | Yash / Devashish | Free-tier data-use terms are unsuitable for real customer data; pricing is model-dependent |
 | Supabase | Sunny | Auth flows and RLS patterns for React Native |

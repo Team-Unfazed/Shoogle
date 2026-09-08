@@ -79,12 +79,24 @@ describe('review', () => {
    * The key distinction: a caption with no problems is `ok`, but the platforms
    * whose limits could not be checked come back in `unchecked`. The composer
    * must show that rather than a bare green tick.
+   *
+   * This now discriminates rather than blanket-unchecking. Instagram's caption
+   * and hashtag limits are documented (2200 / 30), so Instagram is genuinely
+   * checked. Google documents no `LocalPost.summary` limit, so GBP is not —
+   * and Shoogle says so instead of quietly passing it.
    */
   it('separates "nothing wrong" from "nothing checked"', () => {
-    const review = reviewCaption(ownerCaption('A normal caption'), ['instagram', 'linkedin']);
+    const review = reviewCaption(ownerCaption('A normal caption'), ['instagram', 'google_business']);
     expect(review.ok).toBe(true);
     expect(review.issues).toEqual([]);
-    expect(review.unchecked.sort()).toEqual(['instagram', 'linkedin']);
+    expect(review.unchecked).toEqual(['google_business']);
+  });
+
+  it('enforces Instagram’s documented caption ceiling', () => {
+    const review = reviewCaption(ownerCaption('x'.repeat(2201)), ['instagram']);
+    expect(review.ok).toBe(false);
+    expect(review.issues[0]).toMatchObject({ problem: 'too_long', platform: 'instagram' });
+    expect(review.unchecked).toEqual([]);
   });
 
   it('checks nothing, and claims nothing, when no platform is chosen', () => {

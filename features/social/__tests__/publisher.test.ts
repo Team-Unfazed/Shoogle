@@ -16,7 +16,7 @@ const IST = 'Asia/Kolkata';
 const NOW = new Date('2026-08-31T04:00:00.000Z');
 const LATER = '2026-09-02T03:30:00.000Z';
 
-function build(publishers: Partial<Record<'instagram' | 'facebook', PlatformPublisher>> = {}, seed: SocialPost[] = []) {
+function build(publishers: Partial<Record<'instagram' | 'google_business', PlatformPublisher>> = {}, seed: SocialPost[] = []) {
   const store = createInMemoryPostStore(seed);
   const publisher: ShooglePublisher = createSocialPublisher({
     store,
@@ -35,7 +35,7 @@ function build(publishers: Partial<Record<'instagram' | 'facebook', PlatformPubl
   return { store, publisher };
 }
 
-function fakeAdapter(platform: 'instagram' | 'facebook', outcome: PublishOutcome): PlatformPublisher {
+function fakeAdapter(platform: 'instagram' | 'google_business', outcome: PublishOutcome): PlatformPublisher {
   return { platform, publishNow: async () => outcome };
 }
 
@@ -77,11 +77,11 @@ describe('with no integration built', () => {
     const state = await publisher.schedule({
       body: 'x',
       mediaUris: [],
-      targets: ['instagram', 'facebook'],
+      targets: ['instagram', 'google_business'],
       scheduledFor: LATER,
     });
     expect(isUnavailable(state)).toBe(true);
-    if (isUnavailable(state)) expect(state.message).toMatch(/facebook/i);
+    if (isUnavailable(state)) expect(state.message).toMatch(/google_business/i);
   });
 });
 

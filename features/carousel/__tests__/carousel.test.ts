@@ -192,11 +192,20 @@ describe('validation', () => {
   });
 
   /**
-   * THE POINT OF THE WHOLE `unverified` MECHANISM: a carousel Shoogle finds no
-   * fault with is not thereby "accepted by Instagram". Every platform check
-   * lands in `unchecked` until the research is done.
+   * THE POINT OF THE WHOLE `unverified` MECHANISM, now that Instagram is
+   * partly researched: a carousel Shoogle finds no fault with is still not
+   * thereby "accepted by Instagram".
+   *
+   * Both halves must hold at once, on the SAME review:
+   *   - the PNG slide is a real, blocking violation, because Meta documents
+   *     JPEG as the only accepted image format;
+   *   - and Instagram nevertheless lands in `unchecked`, because Meta documents
+   *     no carousel MINIMUM, so the slide-count check could not run.
+   *
+   * "We checked some of it" is the honest answer, and the editor has to render
+   * both — a green tick here would be a lie about the part nobody checked.
    */
-  it('never claims platform acceptance it has not verified', () => {
+  it('reports a verified violation and an unverified gap on the same review', () => {
     const carousel = {
       ...withSlides(['a', 'b']),
       slides: [
@@ -205,10 +214,36 @@ describe('validation', () => {
       ],
     };
 
-    const review = reviewCarousel(carousel, ['instagram', 'linkedin']);
+    const review = reviewCarousel(carousel, ['instagram']);
+
+    expect(review.ok).toBe(false);
+    expect(review.issues).toHaveLength(1);
+    expect(review.issues[0]).toMatchObject({
+      problem: 'unsupported_media_format',
+      slideId: 'a',
+      platform: 'instagram',
+      blocking: true,
+    });
+    expect(review.issues[0]?.message).toMatch(/PNG/);
+
+    // Still unchecked, despite a check having run and failed.
+    expect(review.unchecked).toEqual(['instagram']);
+  });
+
+  it('finds no fault with an all-JPEG carousel, and still says so honestly', () => {
+    const carousel = {
+      ...withSlides(['a', 'b']),
+      slides: [
+        { ...filled('a', 'One'), media: media('jpeg') },
+        { ...filled('b', 'Two'), media: media('jpeg') },
+      ],
+    };
+
+    const review = reviewCarousel(carousel, ['instagram', 'google_business']);
     expect(review.ok).toBe(true);
     expect(review.issues).toEqual([]);
-    expect(review.unchecked.sort()).toEqual(['instagram', 'linkedin']);
+    // Instagram: no documented carousel minimum. GBP: no documented formats.
+    expect(review.unchecked.sort()).toEqual(['google_business', 'instagram']);
   });
 
   it('blocks media whose format could not even be read', () => {

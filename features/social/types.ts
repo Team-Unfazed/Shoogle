@@ -36,8 +36,26 @@ import type { PostState } from './postState';
  * composer as an Instagram post. `features/gbp` deliberately does not build a
  * second composer for it (see that feature's README); the publisher below is
  * the single authoring path.
+ *
+ * WHY THIS LIST IS SHORTER THAN `ProviderId`
+ * ------------------------------------------
+ * `facebook` and `linkedin` are deliberately absent.
+ *
+ * - **LinkedIn was removed from scope on 2026-09-01** by the product owner. It
+ *   survives in `ProviderId` and in the Business tab's account list because
+ *   those are shared, and listing LinkedIn as an unconnected account is
+ *   *truthful*. It is simply never a publishing target.
+ * - **Facebook is not a publishing target either.** Shoogle does not post to a
+ *   Facebook Page. Meta is involved only where Instagram's API requires it, and
+ *   per `docs/research/meta-instagram.md` §1 the Instagram Login path requires
+ *   **no Facebook Page at all**.
+ *
+ * A platform that Shoogle can never publish to does not belong in this array,
+ * because every capability check, target picker and publisher loop iterates it.
+ * If a future surface ever requires a Facebook Page, that is a *connect-screen
+ * prerequisite*, not a composer target, and it belongs in its own type.
  */
-export const SOCIAL_PLATFORMS = ['instagram', 'facebook', 'linkedin', 'google_business'] as const;
+export const SOCIAL_PLATFORMS = ['instagram', 'google_business'] as const;
 
 export type Platform = (typeof SOCIAL_PLATFORMS)[number];
 
@@ -48,21 +66,17 @@ void _platformsAreProviders;
 /** Owner-facing platform names. Used in row badges and target pickers. */
 export const PLATFORM_LABEL: Record<Platform, string> = {
   instagram: 'Instagram',
-  facebook: 'Facebook',
-  linkedin: 'LinkedIn',
   google_business: 'Google Business',
 };
 
 /** Short forms for the cramped "where" badge on a list row. */
 export const PLATFORM_SHORT_LABEL: Record<Platform, string> = {
   instagram: 'IG',
-  facebook: 'FB',
-  linkedin: 'LI',
   google_business: 'GBP',
 };
 
 /**
- * "Instagram", or "IG + FB" once there is more than one. Kept here so the list
+ * "Instagram", or "IG + GBP" once there is more than one. Kept here so the list
  * row, the composer and the next-up card all read identically.
  */
 export function describeTargets(platforms: readonly Platform[]): string | null {

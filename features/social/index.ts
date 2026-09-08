@@ -3,14 +3,18 @@
  *
  * Other features import from '@/features/social' and nothing deeper.
  *
- * NOTE: this feature does NOT call `registerProvider()` for Instagram,
- * Facebook or LinkedIn, and that is deliberate — the same reasoning
- * `features/gbp` records for Google. `app/(tabs)/business.tsx` shows
- * "Integration not built yet" precisely when the provider is unregistered.
- * Registering an implementation that can only answer `not_connected` would
- * delete that true statement and replace it with the claim that a Meta or
- * LinkedIn integration exists. Register the day `connect()` completes a real
- * OAuth flow — not before.
+ * NOTE: this feature does NOT call `registerProvider()` for Instagram, and that
+ * is deliberate — the same reasoning `features/gbp` records for Google.
+ * `app/(tabs)/business.tsx` shows "Integration not built yet" precisely when
+ * the provider is unregistered. Registering an implementation that can only
+ * answer `not_connected` would delete that true statement and replace it with
+ * the claim that a Meta integration exists. Register the day `connect()`
+ * completes a real OAuth flow — not before.
+ *
+ * SCOPE: Instagram and Google Business Profile only. Facebook is not a
+ * publishing target and LinkedIn was removed from scope on 2026-09-01; see the
+ * comment on `SOCIAL_PLATFORMS` in `types.ts` for why they still exist in
+ * `ProviderId`.
  */
 
 /* -- Domain -------------------------------------------------------------- */
@@ -77,9 +81,8 @@ export {
   type CaptionReview,
 } from './captions';
 
-/* -- Platform capabilities (all UNVERIFIED — see platforms.ts) ------------ */
+/* -- Platform capabilities (partly verified — read the header of platforms.ts) */
 export {
-  assumesFormatAccepted,
   capabilitiesFor,
   checkCaptionLength,
   checkHashtagCount,
@@ -89,6 +92,7 @@ export {
   isVerified,
   KNOWN_FORMATS,
   PLATFORM_CAPABILITIES,
+  unsourcedLimits,
   unverified,
   verified,
   type CheckOutcome,
