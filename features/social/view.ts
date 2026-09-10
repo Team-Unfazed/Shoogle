@@ -25,6 +25,7 @@ import {
   describeTargets,
   isConfirmedPublished,
   targetPlatforms,
+  targetsNeedingAttention,
   type SocialPost,
 } from './types';
 
@@ -87,6 +88,20 @@ export interface PostsView {
 }
 
 /** Why a draft is not finished. Ordered by what the owner should fix first. */
+/**
+ * "Facebook skipped — reconnect Facebook", from the provider's own reason.
+ *
+ * Uses each target's recorded message rather than composing a new sentence, so
+ * what the owner reads is what actually happened. Never says or implies that a
+ * skipped target published.
+ */
+function describeBrokenTargets(post: SocialPost): string {
+  const messages = targetsNeedingAttention(post)
+    .map((target) => target.failure?.message)
+    .filter((message): message is string => typeof message === 'string' && message.trim() !== '');
+  return messages.length > 0 ? messages.join(' · ') : 'Some accounts did not publish';
+}
+
 function describeUnfinished(post: SocialPost): string {
   if (post.caption === null || post.caption.body.trim() === '') return 'Caption missing';
   if (post.media.length === 0 && post.carouselId === null) return 'No image yet';
@@ -129,7 +144,17 @@ export function buildPostsView(
   const firstFailed = posts.find((post) => post.state === 'failed') ?? null;
   const failedTarget = firstFailed?.targets.find((target) => target.failure !== null) ?? null;
 
-  const attentionPost = posts.find((post) => post.state === 'draft') ?? null;
+  /*
+   * PRODUCT RULE 13 — a skipped target must stay visible.
+   *
+   * Publishing to Instagram while Facebook was unreachable is the RIGHT
+   * outcome, but it is only honest if the owner is told. A post that went out
+   * to two of three platforms must not sit quietly in the published list
+   * looking complete, so a broken connection outranks an unfinished draft
+   * here: the draft is work the owner already knows about, the skip is not.
+   */
+  const brokenTargetPost = posts.find((post) => targetsNeedingAttention(post).length > 0) ?? null;
+  const attentionPost = brokenTargetPost ?? posts.find((post) => post.state === 'draft') ?? null;
 
   /*
    * Reach comes from the most recently published post, and only when a
@@ -174,8 +199,11 @@ export function buildPostsView(
         : {
             id: attentionPost.id,
             title: attentionPost.title,
-            body: describeUnfinished(attentionPost),
-            actionLabel: 'Finish',
+            body:
+              attentionPost === brokenTargetPost
+                ? describeBrokenTargets(attentionPost)
+                : describeUnfinished(attentionPost),
+            actionLabel: attentionPost === brokenTargetPost ? 'Reconnect' : 'Finish',
           },
 
     published: publishedPosts.map((post) => {

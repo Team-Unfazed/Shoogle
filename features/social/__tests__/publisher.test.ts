@@ -70,8 +70,24 @@ describe('with no integration built', () => {
     expect(await store.list()).toHaveLength(0);
   });
 
-  it('names the platform it cannot reach when only some are missing', async () => {
-    const { publisher } = build({
+  /**
+   * REVERSED BY PRODUCT RULE 13 on 2026-09-11.
+   *
+   * This test used to assert that a partly-reachable post was refused
+   * ENTIRELY — that targeting Instagram and Google Business with only
+   * Instagram connected stored nothing at all.
+   *
+   * That was the coupling the rule forbids: an unconnected Google Business
+   * cost the owner their Instagram post. The refusal was written to stop
+   * Shoogle queueing work nobody would send, which is right about a target
+   * nobody can reach and wrong about the reachable one sitting next to it.
+   *
+   * The guarantee it was protecting survives intact — see the test above,
+   * where nothing is reachable and nothing is stored — and the per-target
+   * behaviour is covered in full by `independence.test.ts`.
+   */
+  it('schedules the reachable targets instead of refusing the whole post', async () => {
+    const { publisher, store } = build({
       instagram: fakeAdapter('instagram', { ok: true, remoteId: 'r', permalink: null, publishedAt: NOW.toISOString() }),
     });
     const state = await publisher.schedule({
@@ -80,8 +96,30 @@ describe('with no integration built', () => {
       targets: ['instagram', 'google_business'],
       scheduledFor: LATER,
     });
+
+    expect(isUnavailable(state)).toBe(false);
+    expect(await store.list()).toHaveLength(1);
+
+    // Google Business is NOT pre-marked skipped. Availability now is not
+    // availability at due time, so each target is judged when attempted.
+    const [stored] = await store.list();
+    expect(stored?.targets.map((t) => t.status)).toEqual(['not_attempted', 'not_attempted']);
+  });
+
+  it('names the platform it cannot reach, in words an owner recognises', async () => {
+    const { publisher } = build({
+      instagram: fakeAdapter('instagram', { ok: true, remoteId: 'r', permalink: null, publishedAt: NOW.toISOString() }),
+    });
+    const state = await publisher.schedule({
+      body: 'x',
+      mediaUris: [],
+      targets: ['google_business'],
+      scheduledFor: LATER,
+    });
+
     expect(isUnavailable(state)).toBe(true);
-    if (isUnavailable(state)) expect(state.message).toMatch(/google_business/i);
+    // "Google Business", not "google_business" — a salon owner reads this.
+    if (isUnavailable(state)) expect(state.message).toMatch(/Google Business/);
   });
 });
 

@@ -94,6 +94,15 @@ docs/
     and self-ticking checklists are not.
 11. **No unnecessary onboarding.**
 12. **English UI.** Generated *business content* may be Hindi/Marathi/Hinglish.
+13. **One platform never blocks another.** Platform availability is determined
+    independently per connected account. A missing credential, permission,
+    Facebook Page or authorization for one platform must never block, gate or
+    hide another. A Facebook Page is **optional at the product level** — Meta
+    requires one to publish *to Facebook*, and that requirement applies to the
+    Facebook connection and nowhere else. Never make creating a Page a
+    prerequisite for Instagram onboarding or authorization. This is a hard
+    acceptance criterion, enforced by
+    `features/social/__tests__/independence.test.ts`.
 
 ---
 

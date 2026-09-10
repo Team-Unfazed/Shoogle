@@ -420,3 +420,126 @@ required no credentials.
 Phase 2 — the per-platform content model (`InstagramContent`, `FacebookContent`,
 `GbpContent`) and per-platform media specs, turning every row of the matrix into
 a real refusal with the sentence that explains it. Needs no credentials.
+
+---
+
+## 2026-09-11 — Phase 2a: platform independence (product rule 13)
+
+### The rule
+
+**One platform never blocks another.** Platform availability is determined
+independently per connected account. A missing credential, permission, Facebook
+Page or authorization for one platform must never block, gate or hide another.
+
+A Facebook Page is **optional at the product level**. Meta requires one to
+publish *to Facebook*; that requirement belongs to the Facebook connection and
+nowhere else. An Instagram professional account with no linked Page is a common
+shape for an Indian local business and must work normally.
+
+Recorded as **product rule 13 in `CLAUDE.md`** — a hard acceptance criterion,
+not a UI preference — and enforced by
+`features/social/__tests__/independence.test.ts`.
+
+### The rule was already being violated, by code committed three days earlier
+
+`publisher.ts` coupled targets in two places. Neither was reachable, because no
+adapter exists for any platform, and both would have gone live with the first
+one:
+
+- **`schedule()`** refused the whole post when *any* target lacked a publisher.
+- **`attemptPublish()`** refused the whole publish for the same reason — the
+  worse of the two. At due time an expired Facebook token would have stopped a
+  perfectly reachable Instagram post from going out at all.
+
+Both were written as honesty guarantees, and about a *single* target they were
+right. Across independent targets they were the coupling the rule forbids.
+
+**What survived:** the refusal is still correct when *nothing* is reachable —
+there is genuinely nothing to schedule, and storing a due date with no publisher
+behind it would show the owner an upcoming post that can never go out. That
+narrower guarantee is still asserted.
+
+### The decision worth recording: a signature, not a comment
+
+A product rule that lives in prose gets broken by the first convenient `if` —
+which is precisely how those two coupling sites came to exist. So the rule is
+enforced the way this codebase enforces its other invariants: by making the
+violation unwriteable.
+
+`availabilityFor(platform, { connection, hasAdapter })` receives **one**
+platform's connection. Not a map, not a registry, not a lookup function. There
+is no other platform in scope, so "check whether Facebook is connected before
+offering Instagram" is not something a reviewer has to catch — it does not
+compile. Passing a mismatched connection throws, because judging Instagram on
+Facebook's state is a bug rather than a state an owner can be in.
+
+`availabilityForAll()` is a pure fan-out over that function: no accumulator, no
+ordering, no early return. Adding one would stand out.
+
+Every unavailability reason is scoped to the platform that owns it.
+`no_eligible_page` is a **Facebook** reason with a **Facebook** action and has no
+representation anywhere Instagram or GBP can see it. That containment is the
+whole of Meta's Page requirement.
+
+### Per-target publishing
+
+A multi-target post is three independent publications that share content, which
+is what `PublishTarget` has modelled since Day 1 — per-platform `status`,
+`failure` and `remoteId`. The all-or-nothing refusal was the anomaly.
+
+With Instagram reachable and Facebook not:
+
+- Instagram publishes and **keeps its `remoteId` and published status**
+- Facebook is marked **`skipped`**, not `failed` — nothing was attempted and
+  nothing went wrong with the post; Shoogle simply could not reach the platform.
+  A failure invites "try again"; a skip invites "reconnect Facebook"
+- The skip carries its own reason and is `retryable`, because reconnecting
+  genuinely fixes it
+- The post lands in the **attention** state reading *"Facebook skipped —
+  reconnect Facebook"*, with a **Reconnect** action
+- **Nothing ever claims Facebook published:** `remoteId`, `permalink` and
+  `publishedAt` all stay null
+
+**A skip is never quiet.** A broken connection now outranks an unfinished draft
+in `needsAttention`: the draft is work the owner already knows about, the skip is
+not. A post that went out to two of three platforms must not sit in the published
+list looking complete.
+
+### One subtlety: two kinds of skip
+
+`skipOccurrence()` already existed for product rule 5 — the owner skipping a post
+deliberately. That also produces `status: 'skipped'`. Collapsing the two would
+either nag an owner about a choice they made on purpose, or bury a broken
+connection among deliberate skips.
+
+They are separated by the reason: a skip with `failure === null` is the owner's;
+one carrying a `failure` is Shoogle's. `wasSkippedForUnavailability()` is the
+predicate, and a test asserts the owner's deliberate skip never reaches the
+attention list.
+
+### Availability is judged at due time, not at scheduling time
+
+Unreachable targets are deliberately **not** pre-marked skipped when a post is
+scheduled. Availability now is not availability at due time — a token
+reconnected this afternoon should publish tonight — so each target is judged
+when it is actually attempted.
+
+### Verification
+
+`npm run typecheck` clean · `npm run lint` clean · **2,401 tests / 51 suites
+passing** (2,375 before; 26 net new, of which 24 are the acceptance matrix).
+
+### Still true
+
+**Nothing has been published by this code, on any platform.** No Meta app, no
+credential, no registered provider, no `supabase/` directory. `availability.ts`
+performs no I/O, holds no token and completes no OAuth flow — it answers "may
+Shoogle offer this platform, and if not, what does the owner do about it?" from
+connections the caller supplies.
+
+### Next
+
+Phase 2b — the per-platform content model (`InstagramContent`,
+`FacebookContent`, `GbpContent`) and per-platform media specs, turning each row
+of the capability matrix into a real refusal carrying the sentence that explains
+it. Needs no credentials.

@@ -31,7 +31,9 @@ export {
   PLATFORM_SHORT_LABEL,
   SOCIAL_PLATFORMS,
   targetPlatforms,
+  targetsNeedingAttention,
   VIDEO_FORMATS,
+  wasSkippedForUnavailability,
   type BusinessBrief,
   type Caption,
   type CaptionLanguage,
@@ -47,6 +49,20 @@ export {
   type Schedule,
   type SocialPost,
 } from './types';
+
+/* -- Per-platform availability (product rule 13) ------------------------- */
+export {
+  availabilityFor,
+  availabilityForAll,
+  availablePlatforms,
+  REQUIRED_SCOPES,
+  selectableTargets,
+  type OwnerAction,
+  type PlatformAvailability,
+  type PlatformConnection,
+  type PlatformInputs,
+  type UnavailableReason,
+} from './availability';
 
 /* -- Lifecycle ----------------------------------------------------------- */
 export {

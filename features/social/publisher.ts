@@ -45,6 +45,7 @@ import { validateSchedule } from './scheduling';
 import type { PostStore } from './store';
 import {
   newTarget,
+  PLATFORM_LABEL,
   SOCIAL_PLATFORMS,
   type MediaAsset,
   type Platform,
@@ -109,7 +110,9 @@ const NO_PUBLISHER_MESSAGE =
   'No social account is connected yet, so Shoogle cannot schedule or publish this post.';
 
 function missingPlatformMessage(platforms: readonly Platform[]): string {
-  const names = platforms.join(', ');
+  // Owner-facing names, not enum values: "Google Business", not
+  // "google_business". This sentence is read by a salon owner, not a log.
+  const names = platforms.map((platform) => PLATFORM_LABEL[platform]).join(', ');
   return `Shoogle cannot publish to ${names} yet — that integration is not built.`;
 }
 
@@ -249,15 +252,31 @@ export function createSocialPublisher(deps: SocialPublisherDeps): ShooglePublish
         return failed('no_target', 'Choose at least one account to post to.', false);
       }
 
-      const missing = platforms.filter((platform) => publishers[platform] === undefined);
-      if (missing.length > 0) {
-        // Nothing is written. A stored schedule with no publisher behind it
-        // would show the owner an upcoming post that can never go out.
+      /*
+       * PRODUCT RULE 13 — one platform never blocks another.
+       *
+       * This used to refuse the whole post when ANY target was unreachable, so
+       * an unconnected Facebook cost the owner their Instagram post. That is
+       * the coupling the rule forbids, and it is fixed here.
+       *
+       * The refusal survives for the case it was actually written for: when
+       * NOTHING can be reached, there is genuinely nothing to schedule, and
+       * storing a due date with no publisher behind it would show the owner an
+       * upcoming post that can never go out.
+       *
+       * Unreachable targets are NOT marked skipped here. Availability at
+       * scheduling time is not availability at due time — a token reconnected
+       * this afternoon should publish tonight — so each target is judged when
+       * it is actually attempted. See `attemptPublish`.
+       */
+      const reachableTargets = platforms.filter((platform) => publishers[platform] !== undefined);
+      if (reachableTargets.length === 0) {
+        // Name what could not be reached. Rule 13 applies to messages too: an
+        // owner told "no account is connected" while their Instagram works
+        // fine learns nothing they can act on.
         return unavailable(
           'not_connected',
-          missing.length === platforms.length
-            ? NO_PUBLISHER_MESSAGE
-            : missingPlatformMessage(missing),
+          reachable().length === 0 ? NO_PUBLISHER_MESSAGE : missingPlatformMessage(platforms),
         );
       }
 
@@ -362,12 +381,19 @@ export function createSocialPublisher(deps: SocialPublisherDeps): ShooglePublish
         return failed('not_publishable', `A ${post.state} post cannot be published.`, false);
       }
 
-      const missing = post.targets
-        .map((target) => target.platform)
-        .filter((platform) => publishers[platform] === undefined);
-      if (missing.length > 0) {
-        return unavailable('not_connected', missingPlatformMessage(missing));
-      }
+      /*
+       * PRODUCT RULE 13 — one platform never blocks another.
+       *
+       * There is deliberately NO all-targets guard here any more. It used to
+       * refuse the entire publish when any target lacked an adapter, which was
+       * the worst instance of the coupling: at due time, an expired Facebook
+       * token would have stopped a perfectly reachable Instagram post from
+       * going out at all.
+       *
+       * Each target is now attempted, or skipped, on its own — see the loop
+       * below. A post with nothing reachable still reaches `failed` honestly,
+       * because every one of its targets will have been skipped.
+       */
 
       // Enter `publishing` before any request leaves, so a crash mid-flight
       // leaves a post that is visibly in progress rather than one that looks
@@ -384,13 +410,24 @@ export function createSocialPublisher(deps: SocialPublisherDeps): ShooglePublish
       for (const target of inFlight.targets) {
         const adapter = publishers[target.platform];
         if (adapter === undefined) {
+          /*
+           * SKIPPED, not FAILED. Nothing was attempted and nothing went wrong
+           * with this post — Shoogle simply could not reach the platform. The
+           * distinction is what the owner needs: a failure invites "try again",
+           * a skip invites "reconnect Facebook".
+           *
+           * `failure` carries the reason, which is what separates a skip
+           * Shoogle made from one the owner made with `skipOccurrence()` —
+           * that one leaves `failure` null. Retryable, because reconnecting
+           * genuinely fixes it.
+           */
           settled.push({
             ...target,
-            status: 'failed',
+            status: 'skipped',
             failure: {
-              code: 'no_adapter',
-              message: missingPlatformMessage([target.platform]),
-              retryable: false,
+              code: 'platform_unavailable',
+              message: `${PLATFORM_LABEL[target.platform]} skipped — reconnect ${PLATFORM_LABEL[target.platform]}.`,
+              retryable: true,
             },
           });
           continue;

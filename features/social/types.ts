@@ -250,8 +250,39 @@ export interface PublishTarget {
   remoteId: string | null;
   /** Instant the provider confirmed it. Null until then. */
   publishedAt: string | null;
-  /** Present only when `status` is 'failed'. */
+  /**
+   * Why this target did not publish. Present when `status` is 'failed', and
+   * when `status` is 'skipped' *because Shoogle could not reach the platform*.
+   *
+   * A skip with `failure === null` is one the OWNER chose (product rule 5).
+   * A skip with a `failure` is one Shoogle made on their behalf. Both are
+   * skips; only one of them is something the owner may want to fix, and
+   * collapsing them would either nag about a deliberate choice or bury a
+   * broken connection.
+   */
   failure: PublishFailure | null;
+}
+
+/**
+ * True when Shoogle skipped this target because the platform was unreachable —
+ * as opposed to the owner skipping it deliberately.
+ *
+ * Product rule 13: one platform's problem must not block another, so an
+ * unreachable target is skipped rather than failing the whole post. That is
+ * only honest if the skip stays visible, which is what this predicate is for.
+ */
+export function wasSkippedForUnavailability(target: PublishTarget): boolean {
+  return target.status === 'skipped' && target.failure !== null;
+}
+
+/**
+ * Targets the owner should be told about: something went wrong, or Shoogle
+ * skipped it for them. Empty for a post that published cleanly.
+ */
+export function targetsNeedingAttention(post: SocialPost): PublishTarget[] {
+  return post.targets.filter(
+    (target) => target.status === 'failed' || wasSkippedForUnavailability(target),
+  );
 }
 
 /** A fresh, unattempted target. The only sanctioned way to make one. */

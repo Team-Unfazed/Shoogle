@@ -90,10 +90,21 @@ The domain foundation, with no integration behind it. Nothing publishes.
    date with no publisher and no runner behind it would show the owner posts
    that can never go out.
 
-### Scope
+### Scope, and the independence rule
 
 **Instagram, Facebook and Google Business Profile.** The owner picks any
-combination. LinkedIn is out of scope (2026-09-01) and is the only `ProviderId`
+combination — and **one platform never blocks another** (product rule 13).
+
+A Facebook Page is optional at the product level. Meta requires one to publish
+*to Facebook*; that requirement belongs to the Facebook connection and must
+never reach Instagram onboarding, Instagram authorization, or a GBP-only owner.
+An Instagram professional account with no linked Page is a common shape for an
+Indian local business, and it must work normally.
+
+This is why `availabilityFor()` takes **one** connection rather than a map of
+all of them: a cross-platform dependency is then a type error rather than
+something a reviewer has to notice. The six-row acceptance matrix is executable,
+in `__tests__/independence.test.ts`. LinkedIn is out of scope (2026-09-01) and is the only `ProviderId`
 deliberately missing from `SOCIAL_PLATFORMS` — listing it as an unconnected
 account elsewhere is truthful; targeting it is not supported.
 
