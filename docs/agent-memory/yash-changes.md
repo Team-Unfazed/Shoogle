@@ -655,3 +655,122 @@ sourced specifications and refusal logic.
 Phase 3 — generation over Pranay's `AiProvider`: three prompt builders, the
 humanization and fabrication guards as executable tests, and the local dev-proxy
 script. The Gemini key is available.
+
+---
+
+## 2026-09-11 — Phase 3: generation, with the guards as code
+
+### Coordination change to Pranay's file — flagged, not silent
+
+`features/seo/ai/contract.ts` gained **two union members** on `AiTask`:
+`social_caption` and `social_slide_copy`. Authorised by the product owner.
+Strictly additive; no existing task, guard, provider behaviour or SEO code was
+touched, and the change is commented in place with the reasoning.
+
+**Why it was necessary rather than convenient.** `AiTask` is closed on purpose
+so "every prompt shipped is reviewable in the repository instead of assembled at
+a call site". The alternative was a second Gemini client inside
+`features/social`, which would have duplicated the data-classification guards
+and given real customer data **two doors out instead of one**. Two members keeps
+exactly one door. **Pranay should be told.**
+
+### Three prompts, and what makes them different
+
+Not one prompt with the platform's name swapped in. Each has a different reader:
+
+- **Instagram** — someone scrolling who stopped for the photo. Told explicitly
+  *not* to write for a searcher, because a caption is not a search surface and
+  search phrasing wastes the one line that matters. The only prompt that asks
+  for hashtags.
+- **Facebook** — a local who follows the Page. Noticeboard, not billboard:
+  100–200 words rather than 60–120, practical detail welcome, **no hashtags**
+  (they read as imported from Instagram), and it never assumes a photo exists
+  because a Page post can be words alone.
+- **GBP** — someone who just searched and is comparing listings. This is where
+  the SEO/AEO/GEO weight belongs, and only here:
+  - **SEO** — the words a person types, not the words a brand picks.
+  - **AEO** — at least one sentence that answers a question *completely on its
+    own*, so an answer engine can lift it. "We do walk-ins on weekday mornings"
+    can be quoted; "come see us!" cannot.
+  - **GEO** — the locality named exactly once, and **never guessed**. A post
+    that places a shop in the wrong neighbourhood is worse than one that names
+    none, which is why `placeLabel()` returns null rather than inferring a
+    locality from a city.
+
+### The guards are executable
+
+A prompt saying "do not invent facts" is a request honoured *most* of the time —
+the worst failure rate available, because the rare bad output goes out in a real
+business's name and nobody checks.
+
+**`fabrication.ts`** is the most important file in the feature. It rejects
+invented prices, percentages, phone numbers, awards, credentials, guarantees,
+unlisted services, and any discount language when `context.offer` is null.
+
+One tuning decision worth recording: **bare "off" was removed from the discount
+vocabulary.** It rejected "putting off a haircut" and "just off the main road" —
+ordinary English. Discount senses are caught by patterns requiring a number or
+"flat" in front. This file errs towards rejecting, but rejecting valid prose on
+every draft makes generation unusable rather than safe, and that distinction is
+the difference between a guard and a nuisance.
+
+**`humanize.ts`** rejects AI-tell phrases, template openers and keyword
+stuffing; it *advises* on flat sentence rhythm. Burstiness is the coefficient of
+variation of sentence length — scale-free, so long and short captions are judged
+on how much they vary rather than how long they are. Advisory rather than
+blocking because a false positive there costs the owner a post.
+
+Both tokenisers are Unicode-aware (`\p{L}\p{M}\p{N}`, and `।` as a sentence
+terminator). `\w` is ASCII-only, so a naive version scores a Marathi caption as
+zero words and every stuffing check passes vacuously — the same class of bug as
+the Devanagari hashtag truncation found on Day 1.
+
+### The refusal is the feature
+
+When every attempt fails, `createSocialGenerator` returns **nothing** and
+explains itself. It does not hand over its least-bad draft with a warning
+attached: a warning beside a caption that *looks* finished gets dismissed, and
+the invented fact goes out anyway.
+
+### Key safety — five mechanisms, and one of them is new
+
+1. No `EXPO_PUBLIC_` prefix → Expo does not inline it → `undefined` on device.
+2. `lib/env`'s `PUBLIC_ENV` allowlist has no Gemini entry.
+3. `assertNoPublicGeminiKey()` refuses to run if the public variant appears.
+4. `.env.local` is git-ignored.
+5. **New:** `keySafety.test.ts` greps the *tracked repository* and fails the
+   build if `EXPO_PUBLIC_GEMINI_API_KEY` is ever assigned, if `lib/env` mentions
+   Gemini, if anything in `features/social` reads the key, or if anything
+   imports the dev proxy into the app.
+
+**Nothing in `features/social` reads, names, holds or receives the key.** It
+holds an `AiProvider` and cannot tell which implementation it has.
+
+### The dev proxy, and why it re-checks
+
+`tools/dev-ai-proxy/server.js` — plain CommonJS, no imports from `features/` or
+`lib/`, nothing imports it, so Metro never bundles it. It holds the key in a
+Node process on the Mac; the device gets a LAN URL, which is not a credential
+and is therefore correctly `EXPO_PUBLIC_`.
+
+**It re-enforces the fixture-only guard on its own account.** A guard running on
+a device is a guard that can be skipped, so the authoritative one has to sit next
+to the credential. Without that, moving the key off the device would have made
+the data guard *weaker*, not stronger. A test asserts the device-side provider
+sends no authorization header of any kind.
+
+### Verification
+
+`npm run typecheck` clean · `npm run lint` clean · **2,486 tests / 54 suites
+passing** (2,436 before; 50 net new).
+
+**The Gemini API key was not accessed during implementation.** It is not present
+in `.env.local` — there is no `GEMINI_API_KEY` line in that file at all — it was
+never requested, printed, hardcoded or read, and no network call to a model was
+made. Every generation test runs against an injected fake `AiProvider`.
+
+### Next
+
+Phase 4 — the compose flow (`app/posts/`): objective → targets → generate →
+media → per-platform edit → preview → schedule, against dev-gated fixtures.
+Still no credentials required.

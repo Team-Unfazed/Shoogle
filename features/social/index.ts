@@ -87,6 +87,9 @@ export {
   type PostContent,
 } from './content';
 
+/* -- Generation (no key is read anywhere in this feature) ---------------- */
+export * from './generation';
+
 /* -- Per-platform media specs -------------------------------------------- */
 export {
   checkMediaAgainstSpec,

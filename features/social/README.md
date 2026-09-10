@@ -2,7 +2,9 @@
 
 **Owner: Yash**
 
-Instagram, Facebook and LinkedIn: connecting accounts, composing, scheduling and publishing posts, and reading back real performance.
+Instagram, Facebook and Google Business Profile: connecting accounts, composing,
+scheduling and publishing posts, and reading back real performance. LinkedIn is
+out of scope (2026-09-01).
 
 ## Where this appears
 The Posts tab and the create-post flow.
@@ -45,8 +47,11 @@ requirements.
 - **Skip and pause must be one tap** from the list (product rule 5).
 - Only report "Published" once the provider confirms it. An optimistic success
   toast is a false claim.
-- Instagram publishing requires a Business/Creator account linked to a Facebook
-  Page, plus app review. Verify current requirements before building the UI.
+- Instagram publishing needs a professional (Business **or** Creator) account
+  and App Review — but **no Facebook Page**. Meta's *Instagram API with
+  Instagram Login* states outright that a linked Page is not required; see
+  `docs/research/meta-instagram.md` §1. The older Facebook-Login path does
+  require one, which is why this feature does not use it.
 
 ---
 
@@ -139,3 +144,55 @@ Facebook refuses. That was a real defect, fixed 2026-09-09.
   asleep cannot publish, so on-device timers are not an option.
 - **A generation endpoint and an approved model tier.** A generation key must
   never be `EXPO_PUBLIC_*` — it would ship inside the APK.
+
+---
+
+## Generation (`generation/`)
+
+Three prompts, not one prompt with the platform's name swapped in. Each surface
+has a different reader, and the prompts say so:
+
+| | Reader | What it optimises for |
+|---|---|---|
+| Instagram | someone scrolling who stopped for the photo | one line that earns the second; hashtags |
+| Facebook | a local who follows the Page | noticeboard detail, longer, **no hashtags** |
+| GBP | someone who just searched and is comparing listings | **SEO / AEO / GEO** |
+
+GBP carries the SEO/AEO/GEO weight because it is the only surface read by
+someone actively searching. AEO in particular means asking for at least one
+**self-contained, quotable sentence** — an answer engine can lift "we do
+walk-ins on weekday mornings" and cannot lift "come see us!".
+
+### The two guards are code, not prompt text
+
+"Write naturally, do not invent facts" in a prompt is a *request*, honoured most
+of the time — which is the worst failure rate available, because the rare bad
+output goes out in a real business's name and nobody is checking.
+
+- **`fabrication.ts`** rejects any claim not traceable to `BusinessContext`:
+  invented prices, percentages, phone numbers, awards, guarantees, or a discount
+  when `context.offer` is null. **This is the most important file in the
+  feature.** A weak caption costs nothing; a fabricated 20% discount costs a
+  customer who turns up expecting it, and the owner finds out from them.
+- **`humanize.ts`** rejects AI-tell phrases, template openers and keyword
+  stuffing; it *advises* on flat sentence rhythm. Blocking vs advisory is
+  deliberate — a false positive that blocks a good caption costs the owner a
+  post.
+
+When every attempt fails both guards, `createSocialGenerator` returns **nothing**
+and says why. It never hands over its least-bad draft with a warning attached: a
+warning beside a caption that looks finished gets dismissed.
+
+### No key is read anywhere in this feature
+
+Generation goes through Pranay's `AiProvider` (`features/seo/ai/`), the single
+door out to a model in this repository and where the data-classification guards
+stand. Nothing here reads, names, holds or receives `GEMINI_API_KEY`.
+
+`tools/dev-ai-proxy/server.js` exists because `GEMINI_API_KEY` has no
+`EXPO_PUBLIC_` prefix and is therefore `undefined` on a real phone — correct,
+and the reason generation cannot be seen in Expo Go. The proxy holds the key in
+a Node process on the developer's machine; the device gets a LAN URL, which is
+not a credential. **The proxy re-enforces the fixture-only guard itself**, on
+the machine that holds the key, because a check running on a device is one that
+can be skipped.
