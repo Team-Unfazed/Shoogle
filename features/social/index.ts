@@ -50,6 +50,54 @@ export {
   type SocialPost,
 } from './types';
 
+/* -- Per-platform content (three genuinely different objects) ------------ */
+export {
+  facebookContent,
+  facebookMedia,
+  GBP_CTA_TYPES,
+  gbpContent,
+  hasAnyContent,
+  instagramAltText,
+  instagramContent,
+  instagramMedia,
+  missingContentFor,
+  platformsWithContent,
+  primaryText,
+  publishablePlatforms,
+  reviewFacebookContent,
+  reviewGbpContent,
+  reviewInstagramContent,
+  reviewPlatformContent,
+  reviewPostContent,
+  type ContentIssue,
+  type ContentReview,
+  type FacebookContent,
+  type FacebookFormat,
+  type GbpAlertType,
+  type GbpCallToAction,
+  type GbpContent,
+  type GbpCtaType,
+  type GbpEvent,
+  type GbpOffer,
+  type GbpTopic,
+  type InstagramCarouselItem,
+  type InstagramContent,
+  type InstagramFormat,
+  type PlatformContent,
+  type PostContent,
+} from './content';
+
+/* -- Per-platform media specs -------------------------------------------- */
+export {
+  checkMediaAgainstSpec,
+  INSTAGRAM_STORY_VIDEO,
+  MEDIA_SPECS,
+  mediaSpecFor,
+  type ImageSpec,
+  type PlatformMediaSpec,
+  type VideoSpec,
+} from './mediaSpecs';
+
 /* -- Per-platform availability (product rule 13) ------------------------- */
 export {
   availabilityFor,

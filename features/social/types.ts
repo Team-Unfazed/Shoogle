@@ -22,6 +22,7 @@
 
 import type { BusinessCategory, ProviderId } from '@/types/domain';
 
+import type { PostContent } from './content';
 import type { PostState } from './postState';
 
 /* -------------------------------------------------------------------------- */
@@ -345,8 +346,19 @@ export interface SocialPost {
    */
   title: string;
   state: PostState;
-  /** Null until written or generated. A post with no caption is not ready. */
-  caption: Caption | null;
+  /**
+   * What this post says on each platform it targets.
+   *
+   * NOT one caption reused everywhere. Instagram, Facebook and Google take
+   * genuinely different objects — Instagram cannot publish without media,
+   * Facebook can publish words alone, Google requires a topic type that
+   * decides which other fields exist — so each targeted platform carries its
+   * own content, and a platform absent from this map is one this post does not
+   * speak to. `{}` is a post nobody has written yet.
+   *
+   * See `features/social/content/`.
+   */
+  content: PostContent;
   media: MediaAsset[];
   /** Set when this post renders a carousel. See `features/carousel`. */
   carouselId: string | null;

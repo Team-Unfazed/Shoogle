@@ -322,7 +322,7 @@ describe('projection onto the shared Post type', () => {
       businessId: 'b1',
       title: 'x',
       state: 'scheduled',
-      caption: null,
+      content: {},
       media: [],
       carouselId: null,
       schedule: { dueAt: LATER, timeZone: IST, owner: 'shoogle' },

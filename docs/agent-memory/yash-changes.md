@@ -543,3 +543,115 @@ Phase 2b — the per-platform content model (`InstagramContent`,
 `FacebookContent`, `GbpContent`) and per-platform media specs, turning each row
 of the capability matrix into a real refusal carrying the sentence that explains
 it. Needs no credentials.
+
+---
+
+## 2026-09-11 — Phase 2b: per-platform content
+
+### Three objects, not one post with three labels
+
+`SocialPost.caption` — a single `Caption` for the whole post — is gone, replaced
+by `content: PostContent`, a map from platform to that platform's own type.
+There is deliberately **no base content to inherit from**, because the three do
+not share a base.
+
+The evidence that these are genuinely different is what each type **cannot**
+express:
+
+- **`InstagramContent` has no text-only member.** Instagram publishes nothing
+  without media. A caller cannot write the sentence.
+- **`FacebookContent` has `{ kind: 'text' }` as a real format**, and a `link`
+  field. Facebook publishes words alone; Instagram has no link field at all.
+- **`GbpContent` has a topic union** — `STANDARD` / `EVENT` / `OFFER` / `ALERT`
+  — where the topic decides which other fields exist. An `OFFER` without an
+  event is unconstructible. Neither Meta platform has anything of the kind.
+
+Two further type-level rules worth recording:
+
+- **`altText` exists only on Instagram's image variants.** Meta: `alt_text` is
+  for image posts, and "Reels and stories are not supported". So alt text on a
+  Reel is not a validation error to catch later — it is a sentence that cannot
+  be written.
+- **GBP's `CALL` CTA is a separate union member with no `url`.** Every other CTA
+  requires one. A `LEARN_MORE` with nowhere to send the customer does not
+  compile.
+
+### `mediaSpecs.ts` — because one shared spec would be wrong twice
+
+| | Instagram | Facebook | GBP |
+|---|---|---|---|
+| Max image | 8 MB | **10 MB** | undocumented |
+| Width | 320–1440 px | **no rule — Facebook resizes** | undocumented |
+| Aspect | 4:5 – 1.91:1 | **no rule** | undocumented |
+| Short edge | not a rule | not a rule | **250 px** |
+
+The short-edge row is the one that would have been lost in a merged spec.
+Google constrains the *smaller dimension whichever way the photo is oriented*;
+Instagram constrains *width* specifically. A 300×200 image passes a width rule
+and fails Google's — modelling them as one field misjudges it. There is a test
+for exactly that image.
+
+Facebook's width and aspect limits are `unverified()` rather than borrowed from
+Instagram. Applying Instagram's 4:5 rule to a Facebook photo would reject a
+picture Facebook would happily have taken.
+
+### The "8 MB" ambiguity, resolved deliberately
+
+Meta writes "8 MB maximum" without saying whether that is 8,000,000 bytes or
+8,388,608. Shoogle enforces the **larger** reading (8 MiB). Enforcing the
+smaller would reject files in between that Meta may well accept, blocking an
+owner from posting a valid photo with no way around it; enforcing the larger
+lets such a file reach Meta, which answers with its own real error that this
+architecture already surfaces honestly. **The wrong direction is the one the
+owner cannot recover from.**
+
+### Product rule 13 holds at the content layer too
+
+Each `review*Content` function takes **only its own platform's content** — the
+same enforcement-by-signature as `availabilityFor`. `reviewPostContent` is a
+pure fan-out, so an invalid Facebook post cannot make an Instagram post invalid,
+and a test asserts every issue's `platform` field matches the review it appears
+in. `publishablePlatforms()` is the content-side counterpart to
+`availablePlatforms()`: a post publishes where both hold, and failing either
+takes no other platform down.
+
+### The lossy seam, labelled as such
+
+`PublishRequest` in `lib/providers/contracts.ts` is shared foundation code
+carrying **one** `body` for every target, so `schedule()` has to fan one body
+out — which is exactly the "one caption copied everywhere" the composer must
+never do. `contentFromSharedRequest()` does it and says so in a warning
+comment; the composer will construct `PostContent` directly, per platform.
+
+Instagram is **omitted** rather than fabricated when that path has no media,
+because its format union has no truthful shape to build. `reviewPostContent`
+then reports the Instagram target as having nothing to say, which is accurate.
+
+### One behavioural change, and why it is an improvement
+
+`describeUnfinished` used to report "Caption missing" first. It now asks for a
+**target** first. Content is per platform, so there is nothing to write until
+the owner has chosen where the post is going — "Caption missing" on a post with
+no target asks for a caption with no platform to belong to. Once targets exist
+it names the platforms still unwritten (*"Instagram not written yet"*) rather
+than a generic caption message, because "caption missing" is unhelpful on a post
+that has an Instagram caption and no Google summary.
+
+The old test was rewritten rather than deleted, with the reasoning kept.
+
+### Verification
+
+`npm run typecheck` clean · `npm run lint` clean · **2,436 tests / 52 suites
+passing** (2,401 before; 35 net new).
+
+### Still true
+
+**Nothing has been published by this code, on any platform.** No OAuth, no real
+API call, no Meta or Gemini credential, no Supabase change. This phase is types,
+sourced specifications and refusal logic.
+
+### Next
+
+Phase 3 — generation over Pranay's `AiProvider`: three prompt builders, the
+humanization and fabrication guards as executable tests, and the local dev-proxy
+script. The Gemini key is available.

@@ -40,6 +40,14 @@ import type { Result } from '@/lib/providers/types';
 import { failed, ready, unavailable, type ErrorState } from '@/lib/state/DataState';
 import type { Post, PostStatus, ProviderId } from '@/types/domain';
 
+import {
+  facebookContent,
+  gbpContent,
+  instagramContent,
+  primaryText,
+  type InstagramFormat,
+  type PostContent,
+} from './content';
 import { transition, toSharedStatus, type PostState } from './postState';
 import { validateSchedule } from './scheduling';
 import type { PostStore } from './store';
@@ -47,6 +55,7 @@ import {
   newTarget,
   PLATFORM_LABEL,
   SOCIAL_PLATFORMS,
+  type Caption,
   type MediaAsset,
   type Platform,
   type PublishFailure,
@@ -129,7 +138,10 @@ export function toDomainPost(post: SocialPost): Post {
   return {
     id: post.id,
     status: toSharedStatus(post.state),
-    body: post.caption?.body ?? '',
+    // The first targeted platform's own words, not a synthesised summary —
+    // see `primaryText`. Three platforms say different things and inventing a
+    // fourth wording would put words in the owner's mouth.
+    body: primaryText(post.content),
     scheduledFor: post.schedule?.dueAt ?? null,
     targets: post.targets.map((target) => ({
       provider: target.platform,
@@ -187,6 +199,86 @@ export function applyPublishOutcome(target: PublishTarget, outcome: PublishOutco
 
 function isPlatform(id: ProviderId): id is Platform {
   return (SOCIAL_PLATFORMS as readonly ProviderId[]).includes(id);
+}
+
+/**
+ * Build per-platform content from the shared contract's single `body`.
+ *
+ * ⚠️ THIS IS THE LOSSY PATH, AND IT IS LOSSY BECAUSE THE CONTRACT IS.
+ *
+ * `PublishRequest` in `lib/providers/contracts.ts` is shared foundation code
+ * carrying one `body` and one `mediaUris` for every target. Fanning that one
+ * body out is the best that can be done from this entry point — and it is
+ * exactly the "one caption copied everywhere" the composer must NOT do. The
+ * composer will construct `PostContent` directly, per platform, with its own
+ * generated copy for each; this function exists so the cross-feature contract
+ * still works in the meantime.
+ *
+ * Instagram is OMITTED when there is no media, rather than fabricated. Its
+ * format union has no text-only member because Instagram cannot publish one,
+ * so there is nothing truthful to construct — and `reviewPostContent` then
+ * reports the Instagram target as having nothing to say, which is accurate.
+ */
+function contentFromSharedRequest(
+  body: string,
+  media: readonly MediaAsset[],
+  platforms: readonly Platform[],
+): PostContent {
+  const text: Caption = {
+    body,
+    hashtags: [],
+    language: 'en',
+    origin: 'owner',
+    generatedBy: null,
+  };
+
+  const content: PostContent = {};
+
+  if (platforms.includes('instagram')) {
+    const format = instagramFormatFor(media);
+    if (format !== null) content.instagram = instagramContent(text, format);
+  }
+
+  if (platforms.includes('facebook')) {
+    // Facebook takes words alone, so there is always something to build.
+    const [first] = media;
+    content.facebook = facebookContent(
+      text,
+      media.length === 0
+        ? { kind: 'text' }
+        : media.length === 1 && first !== undefined
+          ? first.kind === 'video'
+            ? { kind: 'video', video: first }
+            : { kind: 'photo', photo: first }
+          : { kind: 'multi_photo', photos: [...media] },
+    );
+  }
+
+  if (platforms.includes('google_business')) {
+    content.google_business = gbpContent(text, { kind: 'STANDARD' }, { media: [...media] });
+  }
+
+  return content;
+}
+
+/** The natural Instagram format for this media, or null when there is none. */
+function instagramFormatFor(media: readonly MediaAsset[]): InstagramFormat | null {
+  if (media.length === 0) return null;
+  if (media.length > 1) {
+    return {
+      kind: 'carousel',
+      items: media.map((asset) =>
+        asset.kind === 'video'
+          ? ({ kind: 'video', video: asset } as const)
+          : ({ kind: 'image', image: asset, altText: null } as const),
+      ),
+    };
+  }
+  const [only] = media;
+  if (only === undefined) return null;
+  return only.kind === 'video'
+    ? { kind: 'video', video: only }
+    : { kind: 'single_image', image: only, altText: null };
 }
 
 /** Media URIs arrive as strings from the composer; formats are probed later. */
@@ -300,22 +392,22 @@ export function createSocialPublisher(deps: SocialPublisherDeps): ShooglePublish
         schedule = validation.schedule;
       }
 
+      // The post's id is allocated BEFORE its media's, so a post keeps the
+      // same id whether or not it carries photos. Callers and tests address
+      // posts by that id.
+      const postId = newId();
+      const media = mediaFromUris(request.mediaUris, newId);
+
       const post: SocialPost = {
-        id: newId(),
+        id: postId,
         businessId,
         title: request.body.split('\n')[0]?.slice(0, 80) ?? 'Untitled post',
         // Product rule 4: scheduling is the default. "Post now" is the explicit
         // choice the owner makes by passing `scheduledFor: null`, and it still
         // goes through `scheduled` so there is one path to `publishing`.
         state: 'scheduled',
-        caption: {
-          body: request.body,
-          hashtags: [],
-          language: 'en',
-          origin: 'owner',
-          generatedBy: null,
-        },
-        media: mediaFromUris(request.mediaUris, newId),
+        content: contentFromSharedRequest(request.body, media, platforms),
+        media,
         carouselId: null,
         schedule,
         targets: platforms.map(newTarget),

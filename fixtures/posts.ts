@@ -21,7 +21,15 @@
  * unmeasured post's insights are `null`, which is what the store would return.
  */
 
-import { instantAtZonedTime, zonedDateAhead, type SocialPost } from '@/features/social';
+import {
+  facebookContent,
+  gbpContent,
+  instagramContent,
+  instantAtZonedTime,
+  zonedDateAhead,
+  type PostContent,
+  type SocialPost,
+} from '@/features/social';
 
 /** The fixture business is in Navi Mumbai, so its posts are scheduled in IST. */
 export const FIXTURE_TIME_ZONE = 'Asia/Kolkata';
@@ -46,13 +54,10 @@ function scheduled(
     businessId: FIXTURE_BUSINESS_ID,
     title,
     state: 'scheduled',
-    caption: {
-      body: `${title}. Development fixture caption — not a real business's words.`,
-      hashtags: [],
-      language: 'en',
-      origin: 'owner',
-      generatedBy: null,
-    },
+    // Per-platform content, written per platform even in a fixture — a fixture
+    // that reused one caption everywhere would exercise a path the real
+    // composer does not have.
+    content: fixtureContent(title, platforms, media),
     media,
     carouselId: null,
     schedule: { dueAt, timeZone: FIXTURE_TIME_ZONE, owner: 'shoogle' },
@@ -69,6 +74,56 @@ function scheduled(
     updatedAt: createdAt,
     isFixture: true,
   };
+}
+
+function fixtureCaption(body: string, hashtags: string[] = []) {
+  return { body, hashtags, language: 'en' as const, origin: 'owner' as const, generatedBy: null };
+}
+
+/**
+ * Content for each targeted platform, written differently for each — which is
+ * the whole point of the per-platform model and is why the fixture does not
+ * simply repeat one string three times.
+ */
+function fixtureContent(
+  title: string,
+  platforms: readonly SocialPost['targets'][number]['platform'][],
+  media: SocialPost['media'],
+): PostContent {
+  const content: PostContent = {};
+  const [first] = media;
+
+  if (platforms.includes('instagram') && first !== undefined) {
+    content.instagram = instagramContent(
+      fixtureCaption(`${title}. Development fixture caption — not a real business's words.`, [
+        'NaviMumbai',
+      ]),
+      first.kind === 'video'
+        ? { kind: 'reel', video: first }
+        : { kind: 'single_image', image: first, altText: 'Development fixture image.' },
+    );
+  }
+
+  if (platforms.includes('facebook')) {
+    content.facebook = facebookContent(
+      fixtureCaption(`${title} — development fixture text for a Facebook Page post.`),
+      first === undefined
+        ? { kind: 'text' }
+        : first.kind === 'video'
+          ? { kind: 'video', video: first }
+          : { kind: 'photo', photo: first },
+    );
+  }
+
+  if (platforms.includes('google_business')) {
+    content.google_business = gbpContent(
+      fixtureCaption(`${title}. Development fixture summary for a Google local post.`),
+      { kind: 'STANDARD' },
+      { callToAction: { type: 'CALL' }, media: [...media] },
+    );
+  }
+
+  return content;
 }
 
 function image(id: string): SocialPost['media'] {
@@ -147,7 +202,9 @@ export function socialPostsFixture(now: Date = new Date()): SocialPost[] {
       businessId: FIXTURE_BUSINESS_ID,
       title: 'Draft: Monsoon offer',
       state: 'draft',
-      caption: null,
+      // A draft nobody has written yet: no platform content at all. `{}` is
+      // the honest empty, and the list says exactly what is missing.
+      content: {},
       media: image('fixture-media-4'),
       carouselId: null,
       schedule: null,
@@ -165,12 +222,15 @@ export function socialPostsFixture(now: Date = new Date()): SocialPost[] {
       businessId: FIXTURE_BUSINESS_ID,
       title: 'Smooth driving test, zero stress',
       state: 'published',
-      caption: {
-        body: 'Development fixture caption for an already-published post.',
-        hashtags: ['NaviMumbai'],
-        language: 'en',
-        origin: 'owner',
-        generatedBy: null,
+      content: {
+        instagram: instagramContent(
+          fixtureCaption('Development fixture caption for an already-published post.', ['NaviMumbai']),
+          {
+            kind: 'single_image',
+            image: image('fixture-media-5')[0]!,
+            altText: 'Development fixture image.',
+          },
+        ),
       },
       media: image('fixture-media-5'),
       carouselId: null,
@@ -206,12 +266,15 @@ export function socialPostsFixture(now: Date = new Date()): SocialPost[] {
       businessId: FIXTURE_BUSINESS_ID,
       title: 'Weekend slots are open',
       state: 'failed',
-      caption: {
-        body: 'Development fixture caption for a post that failed to publish.',
-        hashtags: [],
-        language: 'en',
-        origin: 'owner',
-        generatedBy: null,
+      content: {
+        instagram: instagramContent(
+          fixtureCaption('Development fixture caption for a post that failed to publish.'),
+          {
+            kind: 'single_image',
+            image: image('fixture-media-6')[0]!,
+            altText: 'Development fixture image.',
+          },
+        ),
       },
       media: image('fixture-media-6'),
       carouselId: null,

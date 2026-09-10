@@ -16,6 +16,7 @@
  *     so "Published" always means a provider confirmed it.
  */
 
+import { missingContentFor, primaryText } from './content';
 import { DRAFT_LIKE_STATES } from './postState';
 import { bySoonestDue, nextDuePost } from './scheduling';
 import { formatNextUpLabel, formatScheduleLabel } from './time';
@@ -24,6 +25,7 @@ import {
   describeMedia,
   describeTargets,
   isConfirmedPublished,
+  PLATFORM_LABEL,
   targetPlatforms,
   targetsNeedingAttention,
   type SocialPost,
@@ -103,9 +105,19 @@ function describeBrokenTargets(post: SocialPost): string {
 }
 
 function describeUnfinished(post: SocialPost): string {
-  if (post.caption === null || post.caption.body.trim() === '') return 'Caption missing';
-  if (post.media.length === 0 && post.carouselId === null) return 'No image yet';
   if (post.targets.length === 0) return 'No account chosen';
+
+  // Named per platform, because "Caption missing" is unhelpful on a post that
+  // has an Instagram caption and no Google summary. The owner needs to know
+  // which surface still needs writing.
+  const missing = missingContentFor(post.content, targetPlatforms(post));
+  if (missing.length > 0) {
+    const names = missing.map((platform) => PLATFORM_LABEL[platform]).join(' and ');
+    return `${names} not written yet`;
+  }
+
+  if (primaryText(post.content).trim() === '') return 'Caption missing';
+  if (post.media.length === 0 && post.carouselId === null) return 'No image yet';
   return 'Not finished';
 }
 

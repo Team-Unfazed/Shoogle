@@ -23,7 +23,7 @@ function post(id: string, state: SocialPost['state'], dueAt: string | null): Soc
     businessId: 'b1',
     title: id,
     state,
-    caption: null,
+    content: {},
     media: [],
     carouselId: null,
     schedule: dueAt === null ? null : { dueAt, timeZone: IST, owner: 'shoogle' },

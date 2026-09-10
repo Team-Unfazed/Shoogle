@@ -2,6 +2,7 @@ import { isUnavailable, unwrapOrNull } from '@/lib/state/DataState';
 
 import {
   buildPostsView,
+  facebookContent,
   isPostsViewEmpty,
   NO_POSTS_BODY,
   NO_POSTS_TITLE,
@@ -18,7 +19,7 @@ function base(id: string, overrides: Partial<SocialPost> = {}): SocialPost {
     businessId: 'b1',
     title: id,
     state: 'draft',
-    caption: null,
+    content: {},
     media: [],
     carouselId: null,
     schedule: null,
@@ -185,13 +186,51 @@ describe('the posts view', () => {
 
   /* -- Drafts ------------------------------------------------------------- */
 
-  it('says exactly what a draft is missing', () => {
-    expect(buildPostsView([base('d')], IST, NOW).needsAttention?.body).toBe('Caption missing');
+  /**
+   * REORDERED 2026-09-11, as a consequence of per-platform content.
+   *
+   * This used to report "Caption missing" first. Content is now written PER
+   * PLATFORM, so there is nothing to write until the owner has chosen where the
+   * post is going — "Caption missing" on a post with no target would be asking
+   * for a caption that has no platform to belong to.
+   */
+  it('asks for a target first, because content is per platform', () => {
+    expect(buildPostsView([base('d')], IST, NOW).needsAttention?.body).toBe('No account chosen');
+  });
 
-    const withCaption = base('d', {
-      caption: { body: 'Words', hashtags: [], language: 'en', origin: 'owner', generatedBy: null },
+  it('names the platforms still unwritten, rather than saying "caption missing"', () => {
+    const twoTargets = base('d', {
+      targets: [
+        { platform: 'instagram', status: 'not_attempted', permalink: null, remoteId: null, publishedAt: null, failure: null },
+        { platform: 'facebook', status: 'not_attempted', permalink: null, remoteId: null, publishedAt: null, failure: null },
+      ],
+      content: {
+        facebook: facebookContent(
+          { body: 'Words', hashtags: [], language: 'en', origin: 'owner', generatedBy: null },
+          { kind: 'text' },
+        ),
+      },
     });
-    expect(buildPostsView([withCaption], IST, NOW).needsAttention?.body).toBe('No image yet');
+
+    // Facebook is written, Instagram is not. "Caption missing" would be wrong
+    // in both directions: something IS written, and what is missing is
+    // specifically Instagram's.
+    expect(buildPostsView([twoTargets], IST, NOW).needsAttention?.body).toBe('Instagram not written yet');
+  });
+
+  it('moves on to media once every targeted platform has words', () => {
+    const written = base('d', {
+      targets: [
+        { platform: 'facebook', status: 'not_attempted', permalink: null, remoteId: null, publishedAt: null, failure: null },
+      ],
+      content: {
+        facebook: facebookContent(
+          { body: 'Words', hashtags: [], language: 'en', origin: 'owner', generatedBy: null },
+          { kind: 'text' },
+        ),
+      },
+    });
+    expect(buildPostsView([written], IST, NOW).needsAttention?.body).toBe('No image yet');
   });
 
   it('counts drafts, generating and ready posts together, not scheduled ones', () => {
