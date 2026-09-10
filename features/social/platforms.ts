@@ -49,8 +49,15 @@ import { IMAGE_FORMATS, VIDEO_FORMATS, type MediaFormat, type Platform } from '.
  */
 export interface Limit<T> {
   value: T | null;
-  verification: 'verified' | 'unverified';
+  verification: 'verified' | 'unverified' | 'conflicted';
   source: string | null;
+  /**
+   * Present only when `verification` is 'conflicted': every first-party page
+   * consulted, so a reader can go and see the disagreement themselves.
+   */
+  sources?: readonly string[];
+  /** Present only when 'conflicted': what the pages disagree about. */
+  conflict?: string;
 }
 
 export function unverified<T>(): Limit<T> {
@@ -62,8 +69,55 @@ export function verified<T>(value: T, source: string): Limit<T> {
   return { value, verification: 'verified', source };
 }
 
+/**
+ * A limit whose own first-party documentation contradicts itself.
+ *
+ * WHY THIS EXISTS — the alternative was to lie in one of two directions.
+ *
+ * Meta states Facebook's scheduling horizon as 30 days on one page and 75 on
+ * another. Both are Meta's. Calling either `verified()` claims a number the
+ * provider does not agree with itself about. Calling it `unverified()` is
+ * accurate but drops enforcement entirely, letting Shoogle's own 90-day
+ * default through — a post the owner believes is scheduled and which Facebook
+ * will refuse.
+ *
+ * So a conflict is its own state, carrying the CONSERVATIVE end as its value.
+ * `isVerified()` stays false, so nothing may present this as a settled fact.
+ * `isEnforceable()` is true, so a check may still refuse at the tighter bound.
+ * The claim being made is exactly: "we do not know the true limit, but we know
+ * it is at least this strict" — which is true, and useful.
+ *
+ * Erring tight costs the owner a scheduling option they can see and report.
+ * Erring loose costs them a post they never learn did not go out.
+ */
+export function conflicted<T>(
+  conservative: T,
+  sources: readonly string[],
+  conflict: string,
+): Limit<T> {
+  return {
+    value: conservative,
+    verification: 'conflicted',
+    source: sources[0] ?? null,
+    sources,
+    conflict,
+  };
+}
+
+/** Settled fact, from one first-party page. A conflict is NOT verified. */
 export function isVerified<T>(limit: Limit<T>): limit is Limit<T> & { value: T; source: string } {
   return limit.verification === 'verified' && limit.value !== null;
+}
+
+/**
+ * Whether a check may refuse on the strength of this limit — true for a
+ * verified limit and for the conservative end of a conflicted one.
+ *
+ * Use this to ENFORCE. Use `isVerified` to CLAIM. They are different questions
+ * and conflating them is how a disputed number becomes a stated one.
+ */
+export function isEnforceable<T>(limit: Limit<T>): limit is Limit<T> & { value: T } {
+  return limit.verification !== 'unverified' && limit.value !== null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -94,6 +148,16 @@ export interface PlatformCapabilities {
   providerSideScheduling: Limit<boolean>;
   /** Whether publishing requires the app to pass the platform's review. */
   requiresAppReview: Limit<boolean>;
+  /**
+   * The platform's OWN minimum notice for a scheduled post, in minutes.
+   *
+   * Distinct from Shoogle's `MIN_SCHEDULE_LEAD_MINUTES`, which exists because
+   * the runner needs time to work. This one is the provider's rule, and where
+   * a platform states one it is stricter than ours and wins.
+   */
+  scheduleMinLeadMinutes: Limit<number>;
+  /** The platform's own maximum scheduling horizon, in days. */
+  scheduleMaxHorizonDays: Limit<number>;
 }
 
 /* -- Sources. Named so a reader can see which page a number came from. ----- */
@@ -117,6 +181,18 @@ const IG_MEDIA_REFERENCE =
 
 /** Meta, *Access Levels*. Advanced Access — i.e. real customers — is gated. */
 const IG_ACCESS_LEVELS = 'https://developers.facebook.com/docs/graph-api/overview/access-levels';
+
+/** Meta, *Page photos* reference. Accepted image formats and the 10 MB cap. */
+const FB_PAGE_PHOTOS = 'https://developers.facebook.com/docs/graph-api/reference/page/photos/';
+
+/** Meta, *Page feed* reference. `scheduled_publish_time` and its bounds. */
+const FB_PAGE_FEED = 'https://developers.facebook.com/docs/graph-api/reference/page/feed/';
+
+/** Meta, *Pages API — posts* guide. States a different horizon to the above. */
+const FB_PAGES_POSTS = 'https://developers.facebook.com/docs/pages-api/posts';
+
+/** Meta, *Pages API overview*. All Page permissions need App Review. */
+const FB_PAGES_OVERVIEW = 'https://developers.facebook.com/docs/pages-api/overview';
 
 /** Google, *accounts.locations.localPosts* v4 reference. `scheduledTime`. */
 const GBP_LOCAL_POSTS =
@@ -169,6 +245,76 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapabilities> = {
      * Advanced Access is what real customers need.
      */
     requiresAppReview: verified(true, IG_ACCESS_LEVELS),
+    /**
+     * Instagram documents no provider-side scheduling at all, so it imposes no
+     * window — Shoogle's runner publishes now, at due time. Both stay null:
+     * the bounds that apply to an Instagram-only post are Shoogle's own.
+     */
+    scheduleMinLeadMinutes: unverified(),
+    scheduleMaxHorizonDays: unverified(),
+  },
+
+  /**
+   * Facebook Page posts. See `docs/research/meta-facebook-pages.md`.
+   *
+   * Read the differences from Instagram rather than assuming they are similar
+   * because both are Meta: Facebook takes a binary upload, accepts PNG, and
+   * schedules natively. Instagram does none of the three.
+   */
+  facebook: {
+    platform: 'facebook',
+    /**
+     * UNVERIFIED. The `/{page-id}/feed` reference documents no maximum length
+     * for `message`. Do not hard-code one and do not truncate — let Facebook
+     * reject and surface its own error. Same posture as GBP's `summary`.
+     */
+    captionMaxCharacters: unverified(),
+    hashtagMaxCount: unverified(),
+    /**
+     * Facebook documents ".jpeg, .bmp, .png, .gif, .tiff" — note that **PNG is
+     * accepted**, the exact opposite of Instagram.
+     *
+     * This list is Facebook's documented set INTERSECTED with the formats
+     * `MediaFormat` can represent. BMP, GIF and TIFF are genuinely accepted by
+     * Facebook and are simply not things Shoogle can hold, so their absence
+     * here is a Shoogle limitation, not a Facebook rule. WEBP and HEIC are a
+     * different case: they are absent from Facebook's list, so they are real
+     * violations.
+     *
+     * The 1 MB PNG figure on the same page is a RECOMMENDATION ("or the image
+     * may appear pixelated"), not a limit, and must never be enforced as one.
+     */
+    acceptedImageFormats: verified(['jpeg', 'png'], FB_PAGE_PHOTOS),
+    /**
+     * UNVERIFIED. The video publishing guide states no Page video format,
+     * size or duration spec. The upload-session docs name pdf/jpeg/jpg/png/mp4,
+     * but that is a list of what the RESUMABLE UPLOADER accepts, not a Page
+     * video specification, and recording it as one would be a fabrication.
+     */
+    acceptedVideoFormats: unverified(),
+    /** Multi-photo posts exist; no documented count in either direction. */
+    carouselMinSlides: unverified(),
+    carouselMaxSlides: unverified(),
+    /** `published=false` + `scheduled_publish_time`. Real native scheduling. */
+    providerSideScheduling: verified(true, FB_PAGE_FEED),
+    /**
+     * "All Page-related Permissions and Features require approval through the
+     * App Review process before your app can use them when your app goes live."
+     */
+    requiresAppReview: verified(true, FB_PAGES_OVERVIEW),
+    /** Both Meta pages agree on the floor: 10 minutes. */
+    scheduleMinLeadMinutes: verified(10, FB_PAGE_FEED),
+    /**
+     * THE CONFLICT. Two Meta pages, two different maxima:
+     *   - the Pages API posts guide says 30 days
+     *   - the /{page-id}/feed reference says 75 days
+     * Shoogle enforces 30 and says why. See `conflicted()` for the reasoning.
+     */
+    scheduleMaxHorizonDays: conflicted(
+      30,
+      [FB_PAGES_POSTS, FB_PAGE_FEED],
+      'Meta documents the maximum as 30 days on the Pages API posts guide and 75 days on the /{page-id}/feed reference. Shoogle enforces the conservative 30.',
+    ),
   },
 
   /**
@@ -209,6 +355,14 @@ export const PLATFORM_CAPABILITIES: Record<Platform, PlatformCapabilities> = {
      * for, so it is recorded as true and the mechanism noted here.
      */
     requiresAppReview: verified(true, GBP_PREREQS),
+    /**
+     * `scheduledTime` is documented but no window around it is. Unlike
+     * Instagram — where no window applies because there is no provider
+     * scheduling at all — here scheduling IS supported and the bounds are
+     * simply unpublished. Both are null; the reasons are not the same.
+     */
+    scheduleMinLeadMinutes: unverified(),
+    scheduleMaxHorizonDays: unverified(),
   },
 };
 
@@ -267,6 +421,7 @@ function unverifiedResult(what: string, platform: Platform): CheckResult {
 
 const PLATFORM_RESEARCH_NAME: Record<Platform, string> = {
   instagram: 'Instagram',
+  facebook: 'Facebook',
   google_business: 'Google Business Profile',
 };
 
@@ -357,8 +512,17 @@ export function unsourcedLimits(): string[] {
     for (const [field, limit] of Object.entries(caps)) {
       if (field === 'platform') continue;
       const claim = limit as Limit<unknown>;
-      if (claim.verification === 'verified' && (claim.source === null || claim.source === '')) {
+      if (claim.verification === 'unverified') continue;
+
+      if (claim.source === null || claim.source === '') {
         offenders.push(`${caps.platform}.${field}`);
+        continue;
+      }
+      // A conflict must show its work: every page consulted, and what they
+      // disagree about. One URL cannot evidence a disagreement.
+      if (claim.verification === 'conflicted') {
+        const enough = (claim.sources?.length ?? 0) >= 2 && (claim.conflict ?? '').trim() !== '';
+        if (!enough) offenders.push(`${caps.platform}.${field}`);
       }
     }
   }

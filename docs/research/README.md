@@ -19,6 +19,7 @@ confirms it. Never treat an `UNVERIFIED` line as settled.
 |---|---|---|
 | [`google-business-profile.md`](./google-business-profile.md) | The full GBP API family: endpoints, the single OAuth scope, the access-request gate, verification gating, reviews, local posts, media, performance metrics, quotas, pricing | **VIABLE WITH CONDITIONS** |
 | [`meta-instagram.md`](./meta-instagram.md) | Instagram publishing: Instagram Login vs Facebook Login, OAuth and token exchange, the container→publish flow, formats and limits, access levels and App Review, scheduling | **VIABLE** — no Facebook Page needed, but needs a server |
+| [`meta-facebook-pages.md`](./meta-facebook-pages.md) | Facebook Page publishing: feed/photos/videos endpoints, binary vs URL upload, Page access tokens and the `pages_*` scopes, native scheduling and its documented conflict, and the Instagram auth decision it reopened | **VIABLE** — the only target needing no media hosting |
 | [`local-seo-methodology.md`](./local-seo-methodology.md) | The audit check registry (Areas A–I), scoring and the coverage gate, severity and ordering, and the geo-grid / maps build decision | Methodology, not a provider |
 | [`ai-search-visibility.md`](./ai-search-visibility.md) | Being cited by AI answers, schema.org for Indian local verticals, NAP consistency, what is and is not measurable | Mixed — see §7A vs §7B |
 | [`competitive-grexa.md`](./competitive-grexa.md) | Grexa AI teardown: features, onboarding, pricing, user complaints, and where Shoogle can win | Competitive, not a provider |
@@ -50,6 +51,19 @@ confirms it. Never treat an `UNVERIFIED` line as settled.
    **JPEG is the only accepted image format** (PNG is rejected), and token
    exchange needs `client_secret` and therefore **cannot complete on-device**.
    All three land on the same missing backend.
+
+5. **Facebook is the easiest publishing target, not the hardest** — and it is
+   the opposite of Instagram on every rule that decides whether a post can be
+   built. It accepts a **binary upload**, so a device-local photo publishes with
+   no media hosting; it accepts **PNG**; and it **schedules natively**. It is
+   therefore the only one of the three that can reach a real published post
+   without server-side infrastructure.
+
+6. **Two Meta pages disagree about Facebook's scheduling horizon** — 30 days on
+   the Pages API posts guide, 75 on the `/{page-id}/feed` reference. First-party
+   documentation contradicting itself is its own state, not a coin flip:
+   `platforms.ts` records it as `conflicted()` and enforces the conservative
+   end.
 
 ---
 

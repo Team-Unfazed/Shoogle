@@ -7,6 +7,7 @@ import {
   MAX_SCHEDULE_HORIZON_DAYS,
   MIN_SCHEDULE_LEAD_MINUTES,
   nextDuePost,
+  scheduleWindowFor,
   validateSchedule,
   zonedDateAhead,
   zonedParts,
@@ -152,5 +153,114 @@ describe('the due queue', () => {
 
   it('returns null when nothing is scheduled', () => {
     expect(nextDuePost([post('d', 'draft', null)])).toBeNull();
+  });
+});
+
+/**
+ * THE TWO DEFECTS FOUND ON 2026-09-09, and the tests that would have caught
+ * them.
+ *
+ * Both were latent: nothing publishes yet, so neither could fire. Both would
+ * have produced the single worst outcome this product has — a post the owner
+ * watched Shoogle accept, sitting in a tidy list of upcoming posts, which the
+ * platform was always going to refuse.
+ *
+ *   1. MAX_SCHEDULE_HORIZON_DAYS was 90. Facebook documents at most 75, and
+ *      arguably 30. Ninety exceeds both.
+ *   2. MIN_SCHEDULE_LEAD_MINUTES was 5. Facebook requires 10.
+ *
+ * The fix is not a smaller constant — it is that the window belongs to the
+ * TARGETS, not to the module.
+ */
+describe('the scheduling window belongs to the targets', () => {
+  it('falls back to Shoogle’s own bounds when nothing is targeted yet', () => {
+    const window = scheduleWindowFor([]);
+    expect(window.minLeadMinutes).toBe(MIN_SCHEDULE_LEAD_MINUTES);
+    expect(window.maxHorizonDays).toBe(MAX_SCHEDULE_HORIZON_DAYS);
+    expect(window.minLeadSetBy).toBeNull();
+    expect(window.maxHorizonSetBy).toBeNull();
+  });
+
+  it('lets Facebook tighten both bounds, and records that it did', () => {
+    const window = scheduleWindowFor(['facebook']);
+    expect(window.minLeadMinutes).toBe(10);
+    expect(window.maxHorizonDays).toBe(30);
+    expect(window.minLeadSetBy).toBe('facebook');
+    expect(window.maxHorizonSetBy).toBe('facebook');
+  });
+
+  it('reports a platform with no documented window as unchecked, not as passing', () => {
+    const window = scheduleWindowFor(['instagram']);
+    expect(window.unverifiedFor).toEqual(['instagram']);
+    // Shoogle's own bounds still apply — they are just not Instagram's.
+    expect(window.minLeadMinutes).toBe(MIN_SCHEDULE_LEAD_MINUTES);
+    expect(window.maxHorizonDays).toBe(MAX_SCHEDULE_HORIZON_DAYS);
+  });
+
+  it('intersects rather than averaging or picking the first target', () => {
+    const window = scheduleWindowFor(['instagram', 'facebook', 'google_business']);
+    // One post goes out at one instant, so the strictest bound wins outright.
+    expect(window.minLeadMinutes).toBe(10);
+    expect(window.maxHorizonDays).toBe(30);
+    expect(window.unverifiedFor.sort()).toEqual(['google_business', 'instagram']);
+  });
+
+  it('is order-independent', () => {
+    const a = scheduleWindowFor(['facebook', 'instagram']);
+    const b = scheduleWindowFor(['instagram', 'facebook']);
+    expect(a.minLeadMinutes).toBe(b.minLeadMinutes);
+    expect(a.maxHorizonDays).toBe(b.maxHorizonDays);
+  });
+});
+
+describe('validateSchedule honours each target’s window', () => {
+  const minutesOut = (n: number) => new Date(NOW.getTime() + n * 60_000).toISOString();
+  const daysOut = (n: number) => new Date(NOW.getTime() + n * 86_400_000).toISOString();
+
+  it('DEFECT 1 — refuses a horizon Facebook would reject, which 90 days allowed', () => {
+    const inSixtyDays = daysOut(60);
+
+    // Shoogle's own ceiling is 90, so with no Facebook target this is fine.
+    expect(validateSchedule(inSixtyDays, IST, NOW).ok).toBe(true);
+
+    const result = validateSchedule(inSixtyDays, IST, NOW, ['facebook']);
+    expect(result).toMatchObject({ ok: false, reason: 'beyond_horizon' });
+    if (!result.ok) {
+      expect(result.message).toMatch(/Facebook/);
+      expect(result.message).toMatch(/30 days/);
+    }
+  });
+
+  it('DEFECT 2 — enforces Facebook’s 10-minute floor, which 5 minutes allowed', () => {
+    const inSevenMinutes = minutesOut(7);
+
+    // Seven minutes clears Shoogle's own 5-minute floor.
+    expect(validateSchedule(inSevenMinutes, IST, NOW).ok).toBe(true);
+
+    const result = validateSchedule(inSevenMinutes, IST, NOW, ['facebook']);
+    expect(result).toMatchObject({ ok: false, reason: 'too_soon' });
+    if (!result.ok) {
+      expect(result.message).toMatch(/Facebook/);
+      expect(result.message).toMatch(/10 minutes/);
+    }
+  });
+
+  it('accepts the exact boundaries rather than being off by one', () => {
+    expect(validateSchedule(minutesOut(10), IST, NOW, ['facebook']).ok).toBe(true);
+    expect(validateSchedule(daysOut(30), IST, NOW, ['facebook']).ok).toBe(true);
+  });
+
+  it('names the platform responsible, so the owner can act on the message', () => {
+    // "too soon" is not something an owner can fix. "Facebook needs at least
+    // 10 minutes' notice" is.
+    const result = validateSchedule(minutesOut(6), IST, NOW, ['instagram', 'facebook']);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/Facebook needs at least 10 minutes/);
+  });
+
+  it('does not tighten anything for a post that only targets Instagram', () => {
+    // Instagram documents no window, so Shoogle's bounds stand unchanged.
+    expect(validateSchedule(minutesOut(7), IST, NOW, ['instagram']).ok).toBe(true);
+    expect(validateSchedule(daysOut(60), IST, NOW, ['instagram']).ok).toBe(true);
   });
 });

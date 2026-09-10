@@ -261,3 +261,162 @@ Phase 1 is blocked on two things, one of them a person:
 
 Buildable meanwhile with no credentials: the `InstagramContent` type and format
 union, and the compose flow against dev-gated fixtures.
+
+---
+
+## 2026-09-09 — Phase 1: Facebook restored, scheduling made per-target
+
+### The scope correction
+
+**Facebook is a real publishing target.** It was briefly removed from
+`SOCIAL_PLATFORMS` on 2026-09-08 on the reading — recorded in the handoff — that
+Meta was only ever an Instagram authentication detail. That was wrong. Final
+scope is **Instagram + Facebook + GBP**, any combination. LinkedIn stays out.
+Google Maps remains not-a-separate-integration: GBP local posts surface on
+Search and Maps.
+
+The narrowing is reverted. Nothing else from `d82350f` needed redoing — the
+Instagram research, the sourced limits, `unsourcedLimits()` and the
+PNG-is-a-violation rule were all orthogonal to the scope change.
+
+### What the Facebook research turned up
+
+`docs/research/meta-facebook-pages.md`, from Meta's live documentation.
+
+**Facebook is the easiest of the three targets, not the hardest**, which was the
+opposite of the working assumption:
+
+| | Instagram | Facebook | GBP |
+|---|---|---|---|
+| Media source | public URL only | **URL *or* binary** | public URL only |
+| PNG | rejected — JPEG only | **accepted** | unverified |
+| Native scheduling | none documented | **yes** | **yes** |
+
+Facebook takes a `multipart/form-data` upload, so **a device-local photo can be
+published to Facebook with no media hosting at all.** It is the one target whose
+publishing path has no server dependency, which is why it now sequences ahead of
+Instagram.
+
+The cost is a prerequisite Instagram does not have: the business must own a
+Facebook Page and the connecting person must hold `CREATE_CONTENT` on it.
+
+### The decision: two independent OAuth flows
+
+Facebook needing a Page reopened Instagram's auth path — Meta's *Instagram API
+with Facebook Login* could have served both targets through one connect flow.
+Rejected, and confirmed by the product owner.
+
+Instagram keeps Instagram Login; Facebook uses Facebook Login for Business; the
+token lifecycles stay completely separate. The reason that decided it: an
+Instagram professional account with no linked Page is a common shape for an
+Indian local business, and the unified path would lock that owner out of
+Instagram to serve a Facebook connection they never asked for. A Page is
+**Facebook's** prerequisite; making it Instagram's would be Shoogle inventing a
+requirement Meta does not impose.
+
+Cost, stated plainly: two OAuth flows and two refresh paths. That is the correct
+work — it buys each target the ability to fail on its own.
+
+### Two real defects found in code written before today
+
+Both in `scheduling.ts`, both latent because nothing publishes yet, and both
+would have produced the worst outcome this product has: a post the owner watched
+Shoogle accept, sitting in a tidy list of upcoming posts, which the platform was
+always going to refuse.
+
+1. **`MAX_SCHEDULE_HORIZON_DAYS = 90`.** Facebook documents at most 75 days, and
+   arguably 30. Ninety exceeds both.
+2. **`MIN_SCHEDULE_LEAD_MINUTES = 5`.** Facebook requires **10**.
+
+**The fix is not a smaller constant.** The window belongs to the *targets*, not
+to the module. `scheduleWindowFor(targets)` intersects every target's documented
+window — strictest minimum lead, tightest horizon — because one post goes out at
+one instant and must satisfy every platform it is aimed at. The module constants
+survive as Shoogle's own floor and ceiling, which is all they ever honestly
+were.
+
+Rejection messages now name the platform responsible. "Too soon" is not
+something an owner can act on; *"Facebook needs at least 10 minutes' notice"*
+is.
+
+### The decision worth recording: a third state for `Limit<T>`
+
+Meta documents Facebook's scheduling horizon as **30 days** on the Pages API
+posts guide and **75 days** on the `/{page-id}/feed` reference. Both are Meta's.
+
+Neither existing state fits, and both available lies were available:
+
+- `verified(30)` or `verified(75)` claims a number the provider does not agree
+  with itself about, and attaches a single URL as though it settled the matter.
+- `unverified()` is accurate but drops enforcement, letting Shoogle's own
+  90-day default through — the exact defect above.
+
+So a conflict became its own state. `conflicted(30, [bothUrls, why])` carries
+the **conservative** end. `isVerified()` stays false, so nothing may present it
+as settled; the new `isEnforceable()` is true, so a check may still refuse at
+the tighter bound. The claim being made is precisely *"we do not know the true
+limit, but we know it is at least this strict"* — which is true, and useful.
+
+Erring tight costs the owner a scheduling option they can see and report to us.
+Erring loose costs them a post they never learn did not go out.
+
+`unsourcedLimits()` was extended to police the new state: a conflict must carry
+**at least two** sources and a description of the disagreement, because one URL
+cannot evidence a contradiction.
+
+### Facebook's capability entry — what is verified and what is not
+
+Verified with Meta URLs: `acceptedImageFormats: ['jpeg','png']`,
+`providerSideScheduling: true`, `requiresAppReview: true`,
+`scheduleMinLeadMinutes: 10`. Conflicted: `scheduleMaxHorizonDays: 30`.
+
+Left unverified on purpose, and each for a specific reason:
+
+- **`captionMaxCharacters`** — the `/feed` reference documents no maximum for
+  `message`. Same posture as GBP's `summary`: let Facebook reject and surface
+  its own error rather than truncating on a guess.
+- **`acceptedVideoFormats`** — the video guide states no Page video spec. The
+  upload-session docs name `pdf/jpeg/jpg/png/mp4`, but that is what the
+  *resumable uploader* accepts, not a Page video specification, and recording it
+  as one would be a fabrication.
+- **Carousel bounds** — multi-photo posts exist; no documented count either way.
+
+One subtlety in the format list, commented in the file: Facebook documents
+".jpeg, .bmp, .png, .gif, .tiff". `['jpeg','png']` is that set **intersected
+with what `MediaFormat` can represent** — BMP, GIF and TIFF are genuinely
+accepted by Facebook and are simply not things Shoogle can hold, so their
+absence is a Shoogle limitation rather than a Facebook rule. WEBP and HEIC are
+the opposite case: absent from Facebook's list, so real violations. The 1 MB PNG
+figure on the same page is a *recommendation* ("or the image may appear
+pixelated"), not a limit, and is never enforced as one.
+
+### Naming
+
+`.env.local.example` already declares **`META_APP_SECRET`** — one Meta app
+serves both platforms, so an Instagram-specific name would be misleading. No
+code or example file needed changing.
+
+**Outstanding:** `docs/research/meta-instagram.md` still says
+`INSTAGRAM_APP_SECRET` in its environment section, which contradicts
+`.env.local.example`. Left as-is under an explicit instruction to keep the
+Instagram research unchanged; the correction is recorded in the Facebook report
+and in the handoff's superseded banner. **Worth fixing when that instruction
+lifts.**
+
+### Verification
+
+`npm run typecheck` clean · `npm run lint` clean · **2,375 tests / 50 suites
+passing** (2,355 before; 20 net new).
+
+### Still true
+
+**Nothing has been published by this code, on any platform.** No Meta app
+exists, no credential is in the repository, no provider is registered, and no
+Supabase directory was created. Phase 1 was code and documentation only, and
+required no credentials.
+
+### Next
+
+Phase 2 — the per-platform content model (`InstagramContent`, `FacebookContent`,
+`GbpContent`) and per-platform media specs, turning every row of the matrix into
+a real refusal with the sentence that explains it. Needs no credentials.

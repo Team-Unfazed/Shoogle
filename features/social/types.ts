@@ -39,23 +39,29 @@ import type { PostState } from './postState';
  *
  * WHY THIS LIST IS SHORTER THAN `ProviderId`
  * ------------------------------------------
- * `facebook` and `linkedin` are deliberately absent.
+ * `linkedin` is deliberately absent. It was removed from scope on 2026-09-01
+ * by the product owner. It survives in `ProviderId` and in the Business tab's
+ * account list because those are shared, and listing LinkedIn as an
+ * unconnected account is *truthful* — it is simply never a publishing target.
  *
- * - **LinkedIn was removed from scope on 2026-09-01** by the product owner. It
- *   survives in `ProviderId` and in the Business tab's account list because
- *   those are shared, and listing LinkedIn as an unconnected account is
- *   *truthful*. It is simply never a publishing target.
- * - **Facebook is not a publishing target either.** Shoogle does not post to a
- *   Facebook Page. Meta is involved only where Instagram's API requires it, and
- *   per `docs/research/meta-instagram.md` §1 the Instagram Login path requires
- *   **no Facebook Page at all**.
- *
- * A platform that Shoogle can never publish to does not belong in this array,
+ * A platform Shoogle can never publish to does not belong in this array,
  * because every capability check, target picker and publisher loop iterates it.
- * If a future surface ever requires a Facebook Page, that is a *connect-screen
- * prerequisite*, not a composer target, and it belongs in its own type.
+ *
+ * FACEBOOK — RESTORED 2026-09-09, AND WHY THE HISTORY MATTERS
+ * ----------------------------------------------------------
+ * Facebook was briefly removed here on the reading that Meta was only ever an
+ * Instagram authentication detail. That was wrong: **Facebook is a first-class
+ * publishing target with its own content shape**, and the owner picks any
+ * combination of the three.
+ *
+ * The three are not variations of one thing. Per `docs/research/`, they
+ * disagree on nearly every rule that matters — Facebook takes a binary upload
+ * and accepts PNG, Instagram demands a public URL and JPEG only; Facebook and
+ * Google schedule natively, Instagram does not. That is why content is
+ * per-platform and why `platforms.ts` carries a source per limit rather than
+ * one shared constant.
  */
-export const SOCIAL_PLATFORMS = ['instagram', 'google_business'] as const;
+export const SOCIAL_PLATFORMS = ['instagram', 'facebook', 'google_business'] as const;
 
 export type Platform = (typeof SOCIAL_PLATFORMS)[number];
 
@@ -66,17 +72,19 @@ void _platformsAreProviders;
 /** Owner-facing platform names. Used in row badges and target pickers. */
 export const PLATFORM_LABEL: Record<Platform, string> = {
   instagram: 'Instagram',
+  facebook: 'Facebook',
   google_business: 'Google Business',
 };
 
 /** Short forms for the cramped "where" badge on a list row. */
 export const PLATFORM_SHORT_LABEL: Record<Platform, string> = {
   instagram: 'IG',
+  facebook: 'FB',
   google_business: 'GBP',
 };
 
 /**
- * "Instagram", or "IG + GBP" once there is more than one. Kept here so the list
+ * "Instagram", or "IG + FB" once there is more than one. Kept here so the list
  * row, the composer and the next-up card all read identically.
  */
 export function describeTargets(platforms: readonly Platform[]): string | null {

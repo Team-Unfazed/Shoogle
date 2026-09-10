@@ -1,5 +1,37 @@
 # Shoogle Social Publishing — Handoff
 
+> ## ⚠️ SCOPE SUPERSEDED — 2026-09-09
+>
+> **This document's platform scope is out of date. Do not act on §1, §5 or §15
+> without reading this box first.**
+>
+> Facebook is a **real publishing target**, not merely an authentication
+> prerequisite for Instagram. The final scope is **Instagram + Facebook +
+> Google Business Profile**, in any combination the owner chooses. The
+> statements below that Facebook "is NOT a publishing target" were reversed by
+> the product owner and are retained only as a record of what was believed at
+> the time.
+>
+> Still correct and unchanged: **LinkedIn is out of scope**, and Google Maps is
+> not a separate integration (GBP local posts surface on Search and Maps).
+>
+> **Read instead:**
+> - `docs/research/meta-facebook-pages.md` — Facebook publishing, and the
+>   Instagram auth decision it reopened (resolved: the two OAuth flows stay
+>   independent).
+> - `docs/research/meta-instagram.md` — Instagram publishing.
+> - `docs/agent-memory/yash-changes.md` — the 2026-09-09 entry.
+>
+> Two further corrections to this document:
+> - The secret is **`META_APP_SECRET`**, not `INSTAGRAM_APP_SECRET` — one Meta
+>   app serves both platforms, and `.env.local.example` already uses the correct
+>   name. Every mention of `INSTAGRAM_APP_SECRET` below is wrong.
+> - §12's four open decisions were all answered on 2026-09-08; see the change
+>   log.
+
+---
+
+
 **Written:** 2026-09-03
 **Author:** Yash (Claude Code session)
 **Branch:** `feature/yash-social`

@@ -69,6 +69,12 @@ The domain foundation, with no integration behind it. Nothing publishes.
 
 ### Three things that must not change without a reason
 
+0. **`isVerified()` to CLAIM, `isEnforceable()` to REFUSE.** A limit whose own
+   documentation contradicts itself — Facebook's scheduling horizon is 30 days
+   on one Meta page and 75 on another — is `conflicted()`, carrying the
+   conservative end. It is not verified, so nothing may state it as fact; it is
+   enforceable, so a check may still refuse at the tighter bound. Conflating the
+   two is how a disputed number becomes a stated one.
 1. **A limit in `PLATFORM_CAPABILITIES` may only be claimed with a source.**
    Caption lengths, accepted formats and slide counts are claims about someone
    else's API. Instagram's are now filled in from
@@ -86,10 +92,31 @@ The domain foundation, with no integration behind it. Nothing publishes.
 
 ### Scope
 
-**Instagram and Google Business Profile only.** LinkedIn was removed from scope
-on 2026-09-01 and Facebook is not a publishing target; both remain valid
-`ProviderId`s because listing them as unconnected accounts is truthful, but
-neither is in `SOCIAL_PLATFORMS`.
+**Instagram, Facebook and Google Business Profile.** The owner picks any
+combination. LinkedIn is out of scope (2026-09-01) and is the only `ProviderId`
+deliberately missing from `SOCIAL_PLATFORMS` — listing it as an unconnected
+account elsewhere is truthful; targeting it is not supported.
+
+The three are not variations of one thing. Per `docs/research/`, they disagree
+on nearly every rule that decides whether a post can be built:
+
+| | Instagram | Facebook | GBP |
+|---|---|---|---|
+| Media source | public URL only | **URL or binary** | public URL only |
+| PNG | rejected | **accepted** | unverified |
+| Native scheduling | no | **yes**, 10 min–30 days | **yes** |
+
+Content is therefore per-platform, and `platforms.ts` carries a source per limit
+rather than one shared constant.
+
+### Scheduling bounds are per-target
+
+`MIN_SCHEDULE_LEAD_MINUTES` and `MAX_SCHEDULE_HORIZON_DAYS` are Shoogle's own
+floor and ceiling, **not the answer**. Always validate through
+`scheduleWindowFor(targets)`, which intersects every target's documented window
+— strictest minimum lead, tightest horizon. Facebook narrows a post to 10
+minutes and 30 days; the module constants alone would accept a schedule
+Facebook refuses. That was a real defect, fixed 2026-09-09.
 
 ### Blocked on
 

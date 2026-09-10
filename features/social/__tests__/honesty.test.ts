@@ -5,6 +5,7 @@ import {
   checkMediaFormat,
   checkSlideCount,
   hasResearchedCapabilities,
+  isEnforceable,
   isVerified,
   PLATFORM_CAPABILITIES,
   SOCIAL_PLATFORMS,
@@ -75,12 +76,14 @@ describe('a limit may only be claimed with a source', () => {
 
 /**
  * The scope decision, asserted rather than described. LinkedIn was removed on
- * 2026-09-01 and Facebook is not a publishing target; both remain valid
- * `ProviderId`s, which is exactly why a test has to hold the line here.
+ * 2026-09-01 and remains a valid `ProviderId`, which is exactly why a test has
+ * to hold the line here. Facebook was briefly removed too, on a misreading that
+ * Meta was only an Instagram authentication detail; it was restored on
+ * 2026-09-09 as a first-class target with its own content shape.
  */
 describe('publishing scope', () => {
-  it('targets Instagram and Google Business Profile, and nothing else', () => {
-    expect([...SOCIAL_PLATFORMS]).toEqual(['instagram', 'google_business']);
+  it('targets Instagram, Facebook and Google Business Profile, and nothing else', () => {
+    expect([...SOCIAL_PLATFORMS]).toEqual(['instagram', 'facebook', 'google_business']);
   });
 });
 
@@ -144,6 +147,76 @@ describe('Instagram limits are verified and enforced', () => {
 
   it('reports Instagram as researched', () => {
     expect(hasResearchedCapabilities('instagram')).toBe(true);
+  });
+});
+
+/**
+ * Facebook is the proof that "both are Meta" explains nothing. On the two rules
+ * that decide whether a post can be built at all — image format and native
+ * scheduling — Facebook is the opposite of Instagram, and a shared media
+ * pipeline would be wrong for one of them.
+ */
+describe('Facebook is not Instagram', () => {
+  it('accepts PNG, which Instagram rejects', () => {
+    expect(checkMediaFormat('facebook', 'png').outcome).toBe('ok');
+    expect(checkMediaFormat('instagram', 'png').outcome).toBe('violation');
+  });
+
+  it('accepts JPEG on both, so the difference is genuinely PNG and not format checking', () => {
+    expect(checkMediaFormat('facebook', 'jpeg').outcome).toBe('ok');
+    expect(checkMediaFormat('instagram', 'jpeg').outcome).toBe('ok');
+  });
+
+  it('rejects the formats Facebook does not document', () => {
+    expect(checkMediaFormat('facebook', 'webp').outcome).toBe('violation');
+    expect(checkMediaFormat('facebook', 'heic').outcome).toBe('violation');
+  });
+
+  it('does not claim to know Page video formats', () => {
+    // The upload-session file-type list is not a Page video specification.
+    expect(checkMediaFormat('facebook', 'mp4').outcome).toBe('unverified');
+  });
+
+  it('schedules natively, where Instagram does not', () => {
+    expect(capabilitiesFor('facebook').providerSideScheduling.value).toBe(true);
+    expect(capabilitiesFor('instagram').providerSideScheduling.value).toBeNull();
+  });
+
+  it('refuses to invent a message length limit', () => {
+    expect(capabilitiesFor('facebook').captionMaxCharacters.value).toBeNull();
+    expect(checkCaptionLength('facebook', 100_000).outcome).toBe('unverified');
+  });
+});
+
+/**
+ * THE CONFLICT. Meta documents Facebook's scheduling horizon as 30 days on one
+ * page and 75 on another. This is neither verified nor unknown, and flattening
+ * it into either would be a lie in one direction or the other.
+ */
+describe('a limit whose own documentation contradicts itself', () => {
+  const horizon = capabilitiesFor('facebook').scheduleMaxHorizonDays;
+
+  it('is not presented as a settled fact', () => {
+    expect(horizon.verification).toBe('conflicted');
+    expect(isVerified(horizon)).toBe(false);
+  });
+
+  it('still binds, at the conservative end', () => {
+    expect(isEnforceable(horizon)).toBe(true);
+    expect(horizon.value).toBe(30);
+  });
+
+  it('shows its work — both pages, and what they disagree about', () => {
+    expect(horizon.sources?.length).toBeGreaterThanOrEqual(2);
+    expect(horizon.conflict).toMatch(/30 days/);
+    expect(horizon.conflict).toMatch(/75 days/);
+  });
+
+  it('does not let a conflict masquerade as researched-and-done', () => {
+    // `hasResearchedCapabilities` asks whether anything is VERIFIED. Facebook
+    // qualifies on other fields, so this must not be read as "the horizon is
+    // known" — which is what the two assertions above exist to pin down.
+    expect(hasResearchedCapabilities('facebook')).toBe(true);
   });
 });
 

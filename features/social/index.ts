@@ -88,7 +88,9 @@ export {
   checkHashtagCount,
   checkMediaFormat,
   checkSlideCount,
+  conflicted,
   hasResearchedCapabilities,
+  isEnforceable,
   isVerified,
   KNOWN_FORMATS,
   PLATFORM_CAPABILITIES,
@@ -108,10 +110,12 @@ export {
   MAX_SCHEDULE_HORIZON_DAYS,
   MIN_SCHEDULE_LEAD_MINUTES,
   nextDuePost,
+  scheduleWindowFor,
   validateSchedule,
   type ScheduleRejection,
   type ScheduleRunner,
   type ScheduleValidation,
+  type ScheduleWindow,
 } from './scheduling';
 
 export {

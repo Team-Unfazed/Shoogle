@@ -127,7 +127,7 @@ export function socialPostsFixture(now: Date = new Date()): SocialPost[] {
       'fixture-post-2',
       'Smooth driving test, zero stress',
       dueIn(3, 18, 30, now),
-      ['instagram', 'google_business'],
+      ['instagram', 'facebook'],
       image('fixture-media-2'),
       createdAt,
     ),
