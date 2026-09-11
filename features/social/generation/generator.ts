@@ -43,6 +43,7 @@ import {
 import { extractInlineHashtags, normaliseHashtags } from '../captions';
 import type { Caption, CaptionLanguage, Platform } from '../types';
 
+import { reviewCompleteness, type CompletenessFinding } from './completeness';
 import { type BusinessContext, type ContentObjective } from './context';
 import { reviewFabrication, type FabricationFinding } from './fabrication';
 import { reviewHumanness, type HumanizeFinding } from './humanize';
@@ -94,19 +95,31 @@ export interface DraftVerdict {
   readonly accepted: boolean;
   readonly fabrication: readonly FabricationFinding[];
   readonly humanness: readonly HumanizeFinding[];
+  /**
+   * Evidence the model was cut off mid-thought. Added after the first live
+   * call returned a caption that invented nothing and read like a person and
+   * stopped mid-sentence — the other two guards both passed it.
+   */
+  readonly completeness: readonly CompletenessFinding[];
 }
 
 /**
  * Judge one draft. Exported so a test — and a future review screen — can run
  * the exact checks the generator runs, rather than an approximation of them.
+ *
+ * Completeness is checked FIRST because it is the cheapest and because a
+ * truncated draft's other findings are not worth reporting: half a caption
+ * fabricates nothing simply by virtue of having stopped early.
  */
 export function judgeDraft(text: string, context: BusinessContext): DraftVerdict {
+  const completeness = reviewCompleteness(text);
   const fabrication = reviewFabrication(text, context);
   const humanness = reviewHumanness(text, context.keywords);
   return {
-    accepted: fabrication.ok && humanness.ok,
+    accepted: completeness.ok && fabrication.ok && humanness.ok,
     fabrication: fabrication.findings,
     humanness: humanness.findings,
+    completeness: completeness.findings,
   };
 }
 
@@ -136,9 +149,9 @@ export interface PlatformDraft {
 }
 
 export const GENERATION_REFUSED_MESSAGE =
-  'Shoogle drafted this a few times and each version either invented something about your ' +
-  'business or read like it was written by a machine. Nothing was saved. Try adding a bit more ' +
-  'detail about what you want to say.';
+  'Shoogle drafted this a few times. Each version either invented something about your business, ' +
+  'read like it was written by a machine, or stopped halfway through. ' +
+  'Nothing was saved. Try adding a bit more detail about what you want to say.';
 
 /**
  * Draft copy for ONE platform.
@@ -257,20 +270,34 @@ function captionFrom(text: string, language: CaptionLanguage, modelId: string): 
 function redraftNote(verdict: DraftVerdict | null): string {
   if (verdict === null) return '';
   const problems = [
+    ...verdict.completeness.map((finding) => `- ${finding.message}`),
     ...verdict.fabrication.map((finding) => `- ${finding.message}`),
     ...verdict.humanness.filter((f) => f.blocking).map((finding) => `- ${finding.message}`),
   ];
-  return [
+
+  const note = [
     'YOUR PREVIOUS ATTEMPT WAS REJECTED',
     ...problems,
     'Write it again. Fix these specifically; do not simply rephrase.',
-  ].join('\n');
+  ];
+
+  /*
+   * A truncated attempt is a LENGTH problem, not a content one. Told only to
+   * "fix it", a model rewrites at the same length and gets cut off in the same
+   * place, so every retry burns a call and fails identically.
+   */
+  if (verdict.completeness.length > 0) {
+    note.push('Your last answer was cut off. Write a SHORTER post that finishes properly.');
+  }
+
+  return note.join('\n');
 }
 
 /** A short, engineer-facing tail on the refusal, so a log says which guard fired. */
 function describeFailure(verdict: DraftVerdict | null): string {
   if (verdict === null) return '';
   const codes = [
+    ...verdict.completeness.map((finding) => finding.code),
     ...verdict.fabrication.map((finding) => finding.code),
     ...verdict.humanness.filter((f) => f.blocking).map((finding) => finding.code),
   ];

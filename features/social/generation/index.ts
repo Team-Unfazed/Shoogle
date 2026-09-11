@@ -34,6 +34,17 @@ export {
 } from './humanize';
 
 export {
+  bodyWithoutTrailingHashtags,
+  finalSentence,
+  MAX_TRAILING_FRAGMENT_WORDS,
+  MAX_UNPUNCTUATED_WORDS,
+  reviewCompleteness,
+  type CompletenessCode,
+  type CompletenessFinding,
+  type CompletenessReport,
+} from './completeness';
+
+export {
   namesUnlistedService,
   reviewFabrication,
   type FabricationCode,

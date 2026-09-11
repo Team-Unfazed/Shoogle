@@ -57,6 +57,27 @@ const ENDPOINT_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const MAX_PROMPT_CHARS = 8000;
 const PORT = Number(process.env.DEV_AI_PROXY_PORT ?? 8788);
 
+/**
+ * Tokens a reasoning model may spend on thinking before it writes anything.
+ *
+ * `maxOutputTokens` caps the WHOLE completion, and on a reasoning model the
+ * thinking tokens come out of that same budget. The first live call asked for
+ * roughly 467 tokens — ample for a 120-word caption — and came back cut off
+ * mid-sentence, because most of the allowance had already been spent before
+ * the caption started.
+ *
+ * So the budget is now the content estimate PLUS a separate reasoning
+ * allowance, rather than the content estimate alone. This is a ceiling and not
+ * a target: a model that finishes early is billed for what it used.
+ */
+const REASONING_HEADROOM_TOKENS = 2048;
+
+/** ~3 characters per token is a rough but adequate English/Hinglish estimate. */
+function outputTokenBudget(maxOutputChars) {
+  const contentTokens = Math.max(64, Math.ceil(maxOutputChars / 3));
+  return contentTokens + REASONING_HEADROOM_TOKENS;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Startup checks                                                             */
 /* -------------------------------------------------------------------------- */
@@ -162,7 +183,7 @@ async function handleGenerate(req, res) {
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
-          maxOutputTokens: Math.max(64, Math.ceil((Number(parsed.maxOutputChars) || 1200) / 3)),
+          maxOutputTokens: outputTokenBudget(Number(parsed.maxOutputChars) || 1200),
         },
       }),
     });
