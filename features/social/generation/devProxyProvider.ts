@@ -97,7 +97,8 @@ export function defaultDevProxyRuntime(): DevProxyRuntime {
     readProxyUrl: () => readPublicEnv(DEV_PROXY_URL_VARIABLE),
     fetchImpl: typeof fetch === 'function' ? (fetch as unknown as ProxyFetch) : null,
     now: () => new Date().toISOString(),
-    model: 'gemini-2.5-flash',
+    // See tools/dev-ai-proxy/server.js: 2.5-flash 404s for newer keys.
+    model: 'gemini-3.6-flash',
   };
 }
 

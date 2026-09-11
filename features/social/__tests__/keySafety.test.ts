@@ -70,9 +70,29 @@ describe('the Gemini key cannot reach the Expo bundle', () => {
    * The whole of `features/social` is written against `AiProvider` and holds no
    * credential. If this ever fails, a second door to a model has been opened
    * and the classification guards have been bypassed rather than reused.
+   *
+   * WHY THIS MATCHES A READ AND NOT THE NAME.
+   *
+   * The first version of this test searched for the string `GEMINI_API_KEY` and
+   * failed the moment a comment said "this file does not read GEMINI_API_KEY" —
+   * a doc promising the right thing was indistinguishable from code doing the
+   * wrong thing. Naming the variable in prose is how the rule gets documented;
+   * READING it is the violation. So the pattern is an environment access.
    */
   it('reads no API key anywhere in features/social', () => {
-    const readers = tracked('GEMINI_API_KEY').filter((path) => path.startsWith('features/social/'));
+    const readers = tracked('(process\\.env|readEnv\\(|getenv)[^\\n]*GEMINI').filter((path) =>
+      path.startsWith('features/social/'),
+    );
+    expect(readers).toEqual([]);
+  });
+
+  it('reads no environment variable at all in the generation layer', () => {
+    // Stricter than the above and scoped to where generation lives: this layer
+    // takes an `AiProvider` by injection and should touch no environment.
+    // `devProxyProvider` is the one exception — it reads the public LAN URL.
+    const readers = tracked('process\\.env')
+      .filter((path) => path.startsWith('features/social/generation/'))
+      .filter((path) => !path.endsWith('devProxyProvider.ts'));
     expect(readers).toEqual([]);
   });
 

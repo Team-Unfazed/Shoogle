@@ -44,7 +44,15 @@ const http = require('node:http');
 const KEY_VARIABLE = 'GEMINI_API_KEY';
 const FORBIDDEN_PUBLIC_VARIABLE = 'EXPO_PUBLIC_GEMINI_API_KEY';
 const FIXTURE_MARKER = '[FIXTURE]';
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+/*
+ * `gemini-2.5-flash` returns 404 for keys created after its cutoff: "This model
+ * is no longer available to new users." Verified against the live API on
+ * 2026-09-11, which is also how it was found — the model list still advertises
+ * 2.5-flash as generateContent-capable, and only generateContent itself refuses.
+ *
+ * Listing a model is therefore NOT evidence that it can be called.
+ */
+const DEFAULT_MODEL = 'gemini-3.6-flash';
 const ENDPOINT_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const MAX_PROMPT_CHARS = 8000;
 const PORT = Number(process.env.DEV_AI_PROXY_PORT ?? 8788);
@@ -165,8 +173,25 @@ async function handleGenerate(req, res) {
   }
 
   if (upstream.status < 200 || upstream.status >= 300) {
-    // The upstream status is forwarded, but never its body: an error body can
-    // echo request headers back, and this one carries the key.
+    /*
+     * The status is forwarded to the client, but never the body: an upstream
+     * error body can echo request headers back, and ours carries the key.
+     *
+     * The reason IS logged here, on the developer's own machine, because a
+     * proxy that hides why the model refused leaves the engineer guessing —
+     * only `error.message` is taken, never the whole body.
+     */
+    let reason = '';
+    try {
+      const parsedError = JSON.parse(raw);
+      reason = (parsedError && parsedError.error && parsedError.error.message) || '';
+    } catch {
+      reason = '';
+    }
+    console.error(
+      `  upstream ${upstream.status} for model "${model}"${reason ? `: ${reason}` : ''}`,
+    );
+
     send(res, upstream.status, {
       error: 'upstream_error',
       message: `The model returned status ${upstream.status}.`,
