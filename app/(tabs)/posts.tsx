@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -62,6 +63,7 @@ const FALLBACK_TIME_ZONE = 'Asia/Kolkata';
 export default function PostsScreen() {
   const theme = useTheme();
   const toast = useToast();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isPreview } = useSession();
   const [filter, setFilter] = useState<PostFilter>('posts');
@@ -213,7 +215,10 @@ export default function PostsScreen() {
         </ScrollView>
 
         {filter === 'posts' ? (
-          <CreatePostButton onPress={notBuilt('The create-post flow')} bottom={theme.spacing.lg} />
+          <CreatePostButton
+            onPress={() => router.push('/social/compose')}
+            bottom={theme.spacing.lg}
+          />
         ) : null}
       </ErrorBoundary>
     </View>

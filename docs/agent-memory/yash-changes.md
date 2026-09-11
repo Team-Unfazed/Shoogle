@@ -774,3 +774,85 @@ made. Every generation test runs against an injected fake `AiProvider`.
 Phase 4 — the compose flow (`app/posts/`): objective → targets → generate →
 media → per-platform edit → preview → schedule, against dev-gated fixtures.
 Still no credentials required.
+
+---
+
+## 2026-09-11 — Phase 4: the compose flow
+
+### It looks like Shoogle because it is built from Shoogle
+
+Before writing a line I read `app/seo/_layout.tsx`, `app/seo/review-reply.tsx`
+(the closest analogue — an AI draft the owner edits), `app/(tabs)/posts.tsx`,
+every `components/ui` primitive's real props, and the theme tokens.
+
+Consequences, all of which came from reading rather than guessing:
+
+- **The route namespace is `app/social/`, not `app/posts/`.** The old handoff
+  said `app/posts/`; `app/seo/_layout.tsx` records the CONTRIBUTING.md
+  allocation — `app/social/` is Yash's. The layout mirrors Pranay's exactly:
+  root stack, `headerShown: false`, `slide_from_right`, 180ms. **No foundation
+  file was edited to add the route.**
+- The design system already had an **`ai` Button variant** and a `Badge` with
+  `accent`, not `tone`. Both are now used as intended rather than approximated.
+- `Textarea` takes `disabled`, not `editable`.
+
+### The state machine is pure, so rule 13 is testable
+
+`compose/state.ts` is a reducer over plain data; the screen renders it and
+dispatches into it, deciding nothing. Same split as the Posts tab.
+
+**Every platform has its own draft entry** — its own status, its own error, its
+own edits, its own platform-specific fields. There is no shared draft, no shared
+status and no shared error, so a Facebook failure cannot mark Instagram failed
+and a Facebook link has nowhere to leak to. The `ComposeDraft` union carries
+`altText` on Instagram, `link` on Facebook and `topic`/`callToAction` on GBP —
+a test asserts `'link' in instagramDraft === false`.
+
+### Three decisions worth recording
+
+**1. Deselecting a platform KEEPS its draft.** An owner who unticks Facebook to
+see the post without it, then changes their mind, must not have lost the copy
+they edited. Deleting it would also be a way for one platform to destroy
+another's work — the failure rule 13 is about. Unselected drafts are simply not
+rendered and not saved.
+
+**2. Saving a draft does not require every platform to be publishable.** The
+first version gated the step on all targets being ready, which is a *publish*
+gate wearing a draft's name — and a coupling: an Instagram card waiting for a
+photo would have stopped the owner saving finished Facebook copy. Now it asks
+only that something is written, and per-platform readiness shows on each card.
+
+**3. Connection state is a NOTE, not a block.** No platform is connected, so
+`availabilityForAll({})` reports every one unavailable. Disabling all three
+would have made the flow dead, and disabling Instagram because Facebook is
+unconnected is the exact coupling rule 13 forbids. Drafting genuinely needs no
+connection; the card says "Not connected yet — you can still write a draft."
+
+### Instagram without media is honest, not broken
+
+`InstagramFormat` has no text-only member, so `contentFor` returns **null** for
+Instagram with no media rather than fabricating a format. The card reads
+"Instagram needs a photo or video. It cannot publish text on its own" — Meta's
+rule, not Shoogle's — while Facebook next to it builds a `text` post and saves
+fine. That asymmetry is the per-platform model doing its job on screen.
+
+### Nothing publishes
+
+The only action writes a `SocialPost` with `state: 'draft'`, `schedule: null`
+and every target `not_attempted` with a null `remoteId`, to an **in-memory**
+store. Tests assert all of it. No adapter is called, no OAuth, no Supabase.
+
+The business context is a `[FIXTURE]`-marked constant with `offer: null`, so the
+anti-fabrication guard rejects any draft mentioning a discount, and the screen
+carries the fixture banner. Generation uses `createDevProxyAiProvider()` in
+`__DEV__` and `noAiProvider` otherwise — **no key is read by the app.**
+
+### Verification
+
+`npm run typecheck` clean · `npm run lint` clean · **2,545 tests / 56 suites
+passing, 1 skipped** (2,511 before; 34 net new). `package-lock.json` untouched.
+
+### Next
+
+Media picking and the JPEG transcode step, which is what unblocks Instagram —
+and which needs the hosting decision, because Meta cURLs the URL.

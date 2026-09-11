@@ -90,6 +90,9 @@ export {
 /* -- Generation (no key is read anywhere in this feature) ---------------- */
 export * from './generation';
 
+/* -- The compose flow ---------------------------------------------------- */
+export * from './compose';
+
 /* -- Per-platform media specs -------------------------------------------- */
 export {
   checkMediaAgainstSpec,
