@@ -46,8 +46,18 @@ import {
   instagramContent,
   primaryText,
   type InstagramFormat,
+  type PlatformContent,
   type PostContent,
 } from './content';
+import {
+  getMediaHost,
+  getMediaPreparer,
+  hostForPlatform,
+  type MediaHost,
+  type MediaPreparer,
+  type PreparedMedia,
+  type PublishableMedia,
+} from './media';
 import { transition, toSharedStatus, type PostState } from './postState';
 import { validateSchedule } from './scheduling';
 import type { PostStore } from './store';
@@ -69,6 +79,36 @@ import {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Everything one adapter needs to publish, and nothing it must not have.
+ *
+ * ================= THE LOCAL-URI BOUNDARY LIVES IN THIS TYPE ================
+ *
+ * Note what is absent: `SocialPost`. An adapter used to receive the whole post,
+ * which meant it received `post.media` — `MediaAsset[]`, whose `uri` is a
+ * `file://` or `content://` path on the phone. Meta cURLs media from a public
+ * URL and Google fetches `sourceUrl`; neither can reach a file on a device. An
+ * adapter holding one is an adapter that can send it.
+ *
+ * So an adapter is handed `PublishableMedia`, which only `mintPublishableMedia`
+ * produces and which refuses any URL that is not https. Passing a local asset
+ * to a publisher does not compile — there is a `@ts-expect-error` test
+ * asserting that, which fails the build if the boundary is ever loosened.
+ *
+ * `content` is the platform's OWN content object, not the post's whole
+ * `PostContent` map, for the same reason: an Instagram adapter has no business
+ * reading what Facebook was going to say.
+ */
+export interface PlatformPublishRequest {
+  readonly platform: Platform;
+  /** This platform's content. Never another platform's. */
+  readonly content: PlatformContent;
+  /** Hosted, publicly fetchable media. Never a device file. */
+  readonly media: readonly PublishableMedia[];
+  /** For correlating a provider response with the post it belongs to. */
+  readonly postId: string;
+}
+
+/**
  * What one platform's publishing adapter must do.
  *
  * Note there is no `schedule` method. Every adapter publishes NOW; Shoogle
@@ -82,7 +122,7 @@ export interface PlatformPublisher {
    * Publish immediately. Must resolve `succeeded` ONLY with a remote id from
    * the provider's response.
    */
-  publishNow(post: SocialPost): Promise<PublishOutcome>;
+  publishNow(request: PlatformPublishRequest): Promise<PublishOutcome>;
 }
 
 export type PublishOutcome =
@@ -103,6 +143,14 @@ export interface SocialPublisherDeps {
   timeZone: string;
   now?: () => Date;
   newId?: () => string;
+  /**
+   * Turns a device file into an artifact one platform will accept. Defaults to
+   * the installed preparer, which is unconfigured — so a post WITH media
+   * cannot publish today, and says so, while a text post still can.
+   */
+  preparer?: MediaPreparer;
+  /** Turns a prepared artifact into a URL a platform can fetch. */
+  mediaHost?: MediaHost;
 }
 
 /** Shoogle's publisher: the shared contract, plus the runner's entry point. */
@@ -303,6 +351,49 @@ export function createSocialPublisher(deps: SocialPublisherDeps): ShooglePublish
   const { store, businessId, timeZone } = deps;
   const publishers = deps.publishers ?? {};
   const now = deps.now ?? (() => new Date());
+  const preparer = deps.preparer ?? getMediaPreparer();
+  const mediaHost = deps.mediaHost ?? getMediaHost();
+
+  /**
+   * Turn one target into a request an adapter may receive.
+   *
+   * This is the only place a `PublishableMedia` array is assembled, and it is
+   * the only path from the owner's device files to an adapter. A post with no
+   * media skips preparation and hosting entirely — Facebook and Google publish
+   * words alone, and a text post should not be blocked by the absence of a
+   * bucket it does not need.
+   */
+  async function requestFor(post: SocialPost, platform: Platform): Result<PlatformPublishRequest> {
+    const content = post.content[platform];
+    if (content === undefined) {
+      return unavailable(
+        'not_supported',
+        `Nothing was written for ${PLATFORM_LABEL[platform]}, so there is nothing to publish there.`,
+      );
+    }
+
+    if (post.media.length === 0) {
+      return ready<PlatformPublishRequest>(
+        { platform, content, media: [], postId: post.id },
+        now().toISOString(),
+      );
+    }
+
+    const prepared: PreparedMedia[] = [];
+    for (const asset of post.media) {
+      const result = await preparer.prepare(asset, platform);
+      if (result.status !== 'ready') return result;
+      prepared.push(result.value);
+    }
+
+    const hosted = await hostForPlatform(mediaHost, platform, prepared);
+    if (hosted.status !== 'ready') return hosted;
+
+    return ready<PlatformPublishRequest>(
+      { platform, content, media: hosted.value.media, postId: post.id },
+      now().toISOString(),
+    );
+  }
 
   let counter = 0;
   const newId =
@@ -527,7 +618,36 @@ export function createSocialPublisher(deps: SocialPublisherDeps): ShooglePublish
           });
           continue;
         }
-        settled.push(applyPublishOutcome(target, await adapter.publishNow(inFlight)));
+        /*
+         * Media is prepared and hosted PER TARGET, and a failure here marks
+         * only this target.
+         *
+         * Instagram's JPEG transcode failing, or its upload failing, must not
+         * cost the owner the Facebook post that was going out alongside it —
+         * product rule 13, in the place where a network error makes coupling
+         * most tempting. The loop simply continues to the next target.
+         */
+        const requested = await requestFor(inFlight, target.platform);
+        if (requested.status !== 'ready') {
+          settled.push({
+            ...target,
+            status: 'failed',
+            failure: {
+              code: 'media_not_publishable',
+              // The connection is fine; this post's photo was the problem, so
+              // retrying is the useful action.
+              kind: 'publish',
+              message:
+                'message' in requested && typeof requested.message === 'string'
+                  ? requested.message
+                  : 'Shoogle could not get this post’s photo ready.',
+              retryable: true,
+            },
+          });
+          continue;
+        }
+
+        settled.push(applyPublishOutcome(target, await adapter.publishNow(requested.value)));
       }
 
       const anyConfirmed = settled.some(

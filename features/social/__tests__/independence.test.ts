@@ -14,11 +14,16 @@ import {
   wasSkippedForUnavailability,
   type Platform,
   type PlatformConnection,
+  type MediaHost,
+  type MediaPreparer,
   type PlatformPublisher,
+  type PreparedMedia,
   type PublishOutcome,
   type ShooglePublisher,
   type SocialPost,
 } from '../index';
+import { mintPublishableMedia } from '../index';
+import { ready } from '@/lib/state/DataState';
 
 /**
  * PRODUCT RULE 13 — ONE PLATFORM NEVER BLOCKS ANOTHER.
@@ -67,11 +72,64 @@ const publishes = (remoteId: string): PublishOutcome => ({
   publishedAt: NOW.toISOString(),
 });
 
+/*
+ * Instagram cannot publish without media — `InstagramFormat` has no text-only
+ * member — so any acceptance case that expects Instagram to publish has to give
+ * it a photo, and therefore a working preparer and host. Facebook and Google
+ * publish words alone and need neither.
+ *
+ * These two fakes stand in for the real pipeline, which is unimplemented.
+ */
+const testPreparer: MediaPreparer = {
+  id: 'test',
+  isConfigured: () => true,
+  prepare: async (source, platform) =>
+    ready<PreparedMedia>(
+      {
+        source,
+        uri: `file:///prepared/${source.id}.jpg`,
+        kind: 'image',
+        format: 'jpeg',
+        width: 1080,
+        height: 1350,
+        byteSize: 400_000,
+        preparedFor: platform,
+        changes: [],
+      },
+      NOW.toISOString(),
+    ),
+};
+
+const testHost: MediaHost = {
+  id: 'test',
+  displayName: 'Test host',
+  isConfigured: () => true,
+  publish: async (artifact) => {
+    const minted = mintPublishableMedia({
+      kind: artifact.kind,
+      url: `https://cdn.example.invalid/${artifact.source.id}.jpg`,
+      contentType: 'image/jpeg',
+      byteSize: artifact.byteSize,
+      width: artifact.width,
+      height: artifact.height,
+      durationSeconds: null,
+      preparedFor: artifact.preparedFor,
+      handle: `h-${artifact.source.id}`,
+      hostedAt: NOW.toISOString(),
+    });
+    if (minted === null) throw new Error('test host produced an unpublishable URL');
+    return ready(minted, NOW.toISOString());
+  },
+  revoke: async () => ready(undefined, NOW.toISOString()),
+};
+
 function publisherWith(publishers: Partial<Record<Platform, PlatformPublisher>>) {
   const store = createInMemoryPostStore([]);
   const publisher: ShooglePublisher = createSocialPublisher({
     store,
     publishers,
+    preparer: testPreparer,
+    mediaHost: testHost,
     businessId: 'b1',
     timeZone: IST,
     now: () => NOW,
@@ -91,7 +149,9 @@ async function scheduleThenPublish(
 ) {
   const scheduled = await publisher.schedule({
     body: 'A real caption.',
-    mediaUris: [],
+    // A photo, because Instagram cannot publish without one. Facebook and
+    // Google take it too, so one schedule serves every acceptance case.
+    mediaUris: ['file:///storage/photo.jpg'],
     targets,
     scheduledFor: null, // post now
   });

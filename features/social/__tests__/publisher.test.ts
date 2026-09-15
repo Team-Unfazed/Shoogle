@@ -4,23 +4,81 @@ import {
   applyPublishOutcome,
   createInMemoryPostStore,
   createSocialPublisher,
+  mintPublishableMedia,
   newTarget,
   toDomainPost,
+  type MediaHost,
+  type MediaPreparer,
   type PlatformPublisher,
+  type PreparedMedia,
   type PublishOutcome,
   type ShooglePublisher,
   type SocialPost,
 } from '../index';
+import { ready } from '@/lib/state/DataState';
 
 const IST = 'Asia/Kolkata';
 const NOW = new Date('2026-08-31T04:00:00.000Z');
 const LATER = '2026-09-02T03:30:00.000Z';
+
+/*
+ * Instagram has no text-only format, so a post targeting it needs media — and
+ * therefore a preparer and a host. These fakes stand in for the real pipeline,
+ * which is unimplemented; `media.test.ts` covers what happens when they fail.
+ */
+const testPreparer: MediaPreparer = {
+  id: 'test',
+  isConfigured: () => true,
+  prepare: async (source, platform) =>
+    ready<PreparedMedia>(
+      {
+        source,
+        uri: `file:///prepared/${source.id}.jpg`,
+        kind: 'image',
+        format: 'jpeg',
+        width: 1080,
+        height: 1350,
+        byteSize: 400_000,
+        preparedFor: platform,
+        changes: [],
+      },
+      NOW.toISOString(),
+    ),
+};
+
+const testHost: MediaHost = {
+  id: 'test',
+  displayName: 'Test host',
+  isConfigured: () => true,
+  publish: async (artifact) => {
+    const minted = mintPublishableMedia({
+      kind: artifact.kind,
+      url: `https://cdn.example.invalid/${artifact.source.id}.jpg`,
+      contentType: 'image/jpeg',
+      byteSize: artifact.byteSize,
+      width: artifact.width,
+      height: artifact.height,
+      durationSeconds: null,
+      preparedFor: artifact.preparedFor,
+      handle: `h-${artifact.source.id}`,
+      hostedAt: NOW.toISOString(),
+    });
+    if (minted === null) throw new Error('test host produced an unpublishable URL');
+    return ready(minted, NOW.toISOString());
+  },
+  revoke: async () => ready(undefined, NOW.toISOString()),
+};
+
+/** A photo, so an Instagram-targeting post has Instagram content to publish. */
+const PHOTO = ['file:///storage/photo.jpg'];
 
 function build(publishers: Partial<Record<'instagram' | 'google_business', PlatformPublisher>> = {}, seed: SocialPost[] = []) {
   const store = createInMemoryPostStore(seed);
   const publisher: ShooglePublisher = createSocialPublisher({
     store,
     publishers,
+    preparer: testPreparer,
+    mediaHost: testHost,
     businessId: 'b1',
     timeZone: IST,
     now: () => NOW,
@@ -208,24 +266,62 @@ describe('publishing', () => {
     expect(failure.permalink).toBeNull();
   });
 
-  it('passes through publishing on the way to published', async () => {
-    const seen: string[] = [];
+  /**
+   * The guarantee: the post is PERSISTED as `publishing` before any request
+   * leaves, so a crash mid-flight leaves a visibly in-progress post rather than
+   * one that looks scheduled and may already be live.
+   *
+   * Observed from the store rather than from the adapter's argument. Adapters
+   * no longer receive the `SocialPost` at all — they get a
+   * `PlatformPublishRequest` carrying only this platform's content and hosted
+   * media, which is what keeps a device file out of a publisher's hands.
+   */
+  it('persists the post as publishing before any request leaves', async () => {
+    const seen: (string | undefined)[] = [];
+    let store!: ReturnType<typeof createInMemoryPostStore>;
+
     const adapter: PlatformPublisher = {
       platform: 'instagram',
-      publishNow: async (post) => {
-        seen.push(post.state);
+      publishNow: async () => {
+        seen.push((await store.get('id-1'))?.state);
         return { ok: true, remoteId: 'r1', permalink: null, publishedAt: NOW.toISOString() };
       },
     };
-    const { publisher, store } = build({ instagram: adapter });
-    await publisher.schedule({ body: 'x', mediaUris: [], targets: ['instagram'], scheduledFor: LATER });
 
-    await publisher.attemptPublish('id-1');
+    const built = build({ instagram: adapter });
+    store = built.store;
+    await built.publisher.schedule({
+      body: 'x',
+      mediaUris: PHOTO,
+      targets: ['instagram'],
+      scheduledFor: LATER,
+    });
 
-    // The adapter saw the post already in `publishing`, so a crash mid-flight
-    // cannot leave it looking merely scheduled.
+    await built.publisher.attemptPublish('id-1');
+
     expect(seen).toEqual(['publishing']);
     expect((await store.get('id-1'))?.state).toBe('published');
+  });
+
+  it('hands the adapter this platform’s content and no other’s', async () => {
+    const seen: string[] = [];
+    const adapter: PlatformPublisher = {
+      platform: 'instagram',
+      publishNow: async (request) => {
+        seen.push(request.content.platform);
+        // Media reaches the adapter only as hosted https URLs — never the
+        // file:// path the composer started from.
+        expect(request.media).toHaveLength(1);
+        expect(request.media[0]?.url.startsWith('https://')).toBe(true);
+        return { ok: true, remoteId: 'r1', permalink: null, publishedAt: NOW.toISOString() };
+      },
+    };
+
+    const { publisher } = build({ instagram: adapter });
+    await publisher.schedule({ body: 'x', mediaUris: PHOTO, targets: ['instagram'], scheduledFor: LATER });
+    await publisher.attemptPublish('id-1');
+
+    expect(seen).toEqual(['instagram']);
   });
 
   it('lands on failed, with the provider reason, when the provider refuses', async () => {
@@ -235,7 +331,7 @@ describe('publishing', () => {
         failure: { code: 'auth_expired', kind: 'authorization', message: 'Instagram permission expired.', retryable: true },
       }),
     });
-    await publisher.schedule({ body: 'x', mediaUris: [], targets: ['instagram'], scheduledFor: LATER });
+    await publisher.schedule({ body: 'x', mediaUris: PHOTO, targets: ['instagram'], scheduledFor: LATER });
 
     const state = await publisher.attemptPublish('id-1');
     expect(isReady(state)).toBe(true);
@@ -255,7 +351,7 @@ describe('publishing', () => {
         publishedAt: NOW.toISOString(),
       }),
     });
-    await publisher.schedule({ body: 'x', mediaUris: [], targets: ['instagram'], scheduledFor: LATER });
+    await publisher.schedule({ body: 'x', mediaUris: PHOTO, targets: ['instagram'], scheduledFor: LATER });
     await publisher.attemptPublish('id-1');
     // Publishing tells us it went out, not how it did. Nobody has counted yet.
     expect((await store.get('id-1'))?.insights).toBeNull();
@@ -285,7 +381,7 @@ describe('owner control — product rule 5', () => {
 
   it('cancels a scheduled post back to ready and clears its slot', async () => {
     const { publisher, store } = build({ instagram: adapter });
-    await publisher.schedule({ body: 'x', mediaUris: [], targets: ['instagram'], scheduledFor: LATER });
+    await publisher.schedule({ body: 'x', mediaUris: PHOTO, targets: ['instagram'], scheduledFor: LATER });
 
     await publisher.cancelScheduled('id-1');
     const stored = await store.get('id-1');
@@ -295,7 +391,7 @@ describe('owner control — product rule 5', () => {
 
   it('skips an occurrence and marks its unattempted targets skipped', async () => {
     const { publisher, store } = build({ instagram: adapter });
-    await publisher.schedule({ body: 'x', mediaUris: [], targets: ['instagram'], scheduledFor: LATER });
+    await publisher.schedule({ body: 'x', mediaUris: PHOTO, targets: ['instagram'], scheduledFor: LATER });
 
     const state = await publisher.skipOccurrence('id-1');
     expect(isReady(state)).toBe(true);
@@ -306,7 +402,7 @@ describe('owner control — product rule 5', () => {
 
   it('refuses to skip a published post rather than rewriting history', async () => {
     const { publisher } = build({ instagram: adapter });
-    await publisher.schedule({ body: 'x', mediaUris: [], targets: ['instagram'], scheduledFor: LATER });
+    await publisher.schedule({ body: 'x', mediaUris: PHOTO, targets: ['instagram'], scheduledFor: LATER });
     await publisher.attemptPublish('id-1');
 
     const state = await publisher.skipOccurrence('id-1');

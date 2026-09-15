@@ -94,6 +94,9 @@ export * from './generation';
 /* -- The compose flow ---------------------------------------------------- */
 export * from './compose';
 
+/* -- Media: device file -> prepared -> hosted, publishable URL ----------- */
+export * from './media';
+
 /* -- Per-platform media specs -------------------------------------------- */
 export {
   checkMediaAgainstSpec,
@@ -219,6 +222,7 @@ export {
   createSocialPublisher,
   toDomainPost,
   type PlatformPublisher,
+  type PlatformPublishRequest,
   type PublishOutcome,
   type ShooglePublisher,
   type SocialPublisherDeps,
