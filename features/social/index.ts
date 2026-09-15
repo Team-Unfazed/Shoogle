@@ -11,10 +11,10 @@
  * the claim that a Meta integration exists. Register the day `connect()`
  * completes a real OAuth flow — not before.
  *
- * SCOPE: Instagram and Google Business Profile only. Facebook is not a
- * publishing target and LinkedIn was removed from scope on 2026-09-01; see the
- * comment on `SOCIAL_PLATFORMS` in `types.ts` for why they still exist in
- * `ProviderId`.
+ * SCOPE: Instagram, Facebook and Google Business Profile, in any combination
+ * the owner chooses. LinkedIn was removed from scope on 2026-09-01 and is the
+ * one `ProviderId` deliberately absent from `SOCIAL_PLATFORMS`; see the comment
+ * there for why it still exists elsewhere.
  */
 
 /* -- Domain -------------------------------------------------------------- */
@@ -44,6 +44,7 @@ export {
   type Platform,
   type PostInsights,
   type PublishFailure,
+  type PublishFailureKind,
   type PublishStatus,
   type PublishTarget,
   type Schedule,
@@ -243,3 +244,20 @@ export {
   postsViewState,
   usePostsView,
 } from './usePostsView';
+
+/* -- Publication summary (derived, never stored) -------------------------- */
+export {
+  ACTION_LABEL,
+  describeOutcome,
+  describeTargetResults,
+  primaryAction,
+  publishSummary,
+  resultFor,
+  TARGET_RESULT_LABEL,
+  targetsForAction,
+  type PublishSummary,
+  type PublishSummaryOutcome,
+  type TargetAction,
+  type TargetResult,
+  type TargetResultKind,
+} from './summary';

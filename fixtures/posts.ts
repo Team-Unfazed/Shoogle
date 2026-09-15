@@ -292,6 +292,7 @@ export function socialPostsFixture(now: Date = new Date()): SocialPost[] {
           publishedAt: null,
           failure: {
             code: 'auth_expired',
+            kind: 'authorization',
             message: 'Instagram permission expired · Retry',
             retryable: true,
           },

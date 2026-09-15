@@ -167,8 +167,64 @@ Advanced Access additionally requires **Business Verification**
 (<https://developers.facebook.com/docs/graph-api/overview/access-levels>: *"Business Verification is
 required to get Advanced Access."*).
 
-**Under Standard Access the whole Facebook pipeline is testable today** against a Page whose admin
-holds a role on our app — the same arrangement Instagram uses.
+### Standard Access needs no App Review — verified 2026-09-13
+
+Four pages re-fetched to settle this precisely, because an earlier roadmap note stated it loosely
+and a loose version of this claim would send someone into App Review months too early.
+
+> "All Business, Consumer, and Gaming apps are automatically approved for Standard Access for all
+> permissions and features."
+> — <https://developers.facebook.com/docs/graph-api/overview/access-levels>
+
+> "Permissions with Standard Access can only be requested from app users who have a role on the
+> requesting app."
+> — same page
+
+> "Standard Access is intended for apps that will only be used by people who have roles on them, or
+> used during app development, when testing API endpoints the calling app has not been approved
+> for."
+> — same page
+
+> "Apps in Development Mode can request any Permission from any app User who has a Role on the app."
+> — <https://developers.facebook.com/docs/pages-api/overview>
+
+Note the qualifier on the review gate quoted above: App Review is required **"before your app can
+use them *when your app goes live*"**. Development Mode with Standard Access is therefore the
+sanctioned path for building and testing, and needs no review and no Business Verification —
+*"Business Verification is required to get Advanced Access"*, and Standard is not Advanced.
+
+### THE PREREQUISITE IS TWO THINGS ON TWO DIFFERENT OBJECTS
+
+This is the part that was stated carelessly and is worth being exact about, because getting it
+wrong produces a permissions error that reads like a code bug.
+
+**A Page cannot hold a role on an app.** What is required is:
+
+1. **A person holds a role on the Meta app** — admin, developer or tester. Standard Access grants
+   permissions to *"app users who have a role on the requesting app"*, and an app user is a person.
+2. **That same person holds the `CREATE_CONTENT` task on the Facebook Page.** The `/feed` and
+   `/photos` references both require *"a Page access token requested by someone who can perform the
+   `CREATE_CONTENT` task on the Page being queried"*, and the overview requires an app user to
+   *"own or be able to perform a Task on the Page"*.
+
+So the configuration is: add the product owner to the Meta app as a role-holder, and confirm they
+hold an admin/editor role on the Shoogle Page. Neither alone is sufficient.
+
+**Under Standard Access, with both of those in place, the whole Facebook pipeline is testable today**
+— the same arrangement Instagram uses with its testers.
+
+### Still UNVERIFIED: what Advanced Access actually costs
+
+Business Verification is confirmed as required. Whether each `pages_*` permission *additionally*
+needs its own submission is **not** settled, and the access-levels page hedges:
+
+> "In some cases additional App Review on an individual permission and feature basis might be
+> required."
+
+**Do not plan the production milestone as though Business Verification alone unlocks it, and do not
+change any implementation on the assumption either way.** The real requirements become knowable when
+the Meta app exists and the App Review dashboard shows what it asks for; until then this stays an
+open item in §8 and the roadmap says the scope is not fully known.
 
 ---
 
@@ -238,6 +294,10 @@ secret serve both.
 
 ## 8. Open items still marked UNVERIFIED
 
+- **Whether each `pages_*` permission needs its own App Review submission** on top of Business
+  Verification for Advanced Access. Meta hedges: *"In some cases additional App Review on an
+  individual permission and feature basis might be required."* Settled only by the App Review
+  dashboard once the Meta app exists. **No implementation decision may rest on either answer.**
 - **Maximum `message` length for a Page post.** None documented.
 - **The scheduling horizon — 30 days or 75.** Two Meta pages conflict (§4). Unresolved.
 - **Facebook Reels.** Stated to be supported by the Video API; no endpoint or process documented

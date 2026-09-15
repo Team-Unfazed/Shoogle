@@ -518,6 +518,9 @@ export function createSocialPublisher(deps: SocialPublisherDeps): ShooglePublish
             status: 'skipped',
             failure: {
               code: 'platform_unavailable',
+              // Reconnect, not retry: Shoogle cannot reach the platform at all,
+              // so another attempt fails identically.
+              kind: 'authorization',
               message: `${PLATFORM_LABEL[target.platform]} skipped — reconnect ${PLATFORM_LABEL[target.platform]}.`,
               retryable: true,
             },

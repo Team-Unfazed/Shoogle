@@ -18,6 +18,13 @@
 
 import { missingContentFor, primaryText } from './content';
 import { DRAFT_LIKE_STATES } from './postState';
+import {
+  ACTION_LABEL,
+  describeOutcome,
+  describeTargetResults,
+  primaryAction,
+  publishSummary,
+} from './summary';
 import { bySoonestDue, nextDuePost } from './scheduling';
 import { formatNextUpLabel, formatScheduleLabel } from './time';
 import {
@@ -65,6 +72,21 @@ export interface PublishedRowView {
   /** Reported numbers, or when it went out. Never a fabricated metric. */
   result: string;
   mediaLabel: string;
+  /**
+   * True when some targets published and some did not.
+   *
+   * REQUIRED, not optional. A renderer cannot forget to consider it, and the
+   * row must visibly differ when it is true — a two-of-three post sitting in
+   * the published list looking like a clean success is the exact
+   * misrepresentation this field exists to prevent.
+   */
+  partial: boolean;
+  /** Per-platform outcomes, always populated. Named, never counted. */
+  perPlatform: string;
+  /** True when something is wrong the owner can act on. */
+  needsAttention: boolean;
+  /** "Reconnect" / "Retry", or null when there is nothing to do. */
+  actionLabel: string | null;
 }
 
 export interface FailedRowView {
@@ -102,6 +124,12 @@ function describeBrokenTargets(post: SocialPost): string {
     .map((target) => target.failure?.message)
     .filter((message): message is string => typeof message === 'string' && message.trim() !== '');
   return messages.length > 0 ? messages.join(' · ') : 'Some accounts did not publish';
+}
+
+/** "Reconnect" or "Retry" for the attention row, from the derived summary. */
+function attentionActionLabel(post: SocialPost): string {
+  const action = primaryAction(publishSummary(post));
+  return action === null ? 'Reconnect' : ACTION_LABEL[action];
 }
 
 function describeUnfinished(post: SocialPost): string {
@@ -165,7 +193,7 @@ export function buildPostsView(
    * looking complete, so a broken connection outranks an unfinished draft
    * here: the draft is work the owner already knows about, the skip is not.
    */
-  const brokenTargetPost = posts.find((post) => targetsNeedingAttention(post).length > 0) ?? null;
+  const brokenTargetPost = posts.find((post) => publishSummary(post).needsAttention) ?? null;
   const attentionPost = brokenTargetPost ?? posts.find((post) => post.state === 'draft') ?? null;
 
   /*
@@ -215,19 +243,38 @@ export function buildPostsView(
               attentionPost === brokenTargetPost
                 ? describeBrokenTargets(attentionPost)
                 : describeUnfinished(attentionPost),
-            actionLabel: attentionPost === brokenTargetPost ? 'Reconnect' : 'Finish',
+            actionLabel:
+              attentionPost === brokenTargetPost ? attentionActionLabel(attentionPost) : 'Finish',
           },
 
     published: publishedPosts.map((post) => {
+      const summary = publishSummary(post);
       const reported = describeInsights(post.insights);
       const at = publishedAtOf(post);
+      const action = primaryAction(summary);
+
+      /*
+       * A PARTIAL POST NEVER GETS A BARE SUCCESS LINE.
+       *
+       * For a clean publication the line is what it always was: reported
+       * numbers, or the time it went out. For a partial one the outcome
+       * replaces that entirely — reach numbers beside a post that only half
+       * went out would be the most misleading thing on the screen, because they
+       * are real numbers implying a publication that did not fully happen.
+       */
+      const result = summary.needsAttention
+        ? describeOutcome(summary)
+        : (reported ?? (at === null ? 'Published' : `Published ${formatScheduleLabel(at, timeZone)}`));
+
       return {
         id: post.id,
         title: post.title,
-        result:
-          reported ??
-          (at === null ? 'Published' : `Published ${formatScheduleLabel(at, timeZone)}`),
+        result,
         mediaLabel: describeMedia(post.media) ?? '',
+        partial: summary.isPartial,
+        perPlatform: describeTargetResults(summary),
+        needsAttention: summary.needsAttention,
+        actionLabel: action === null ? null : ACTION_LABEL[action],
       };
     }),
 

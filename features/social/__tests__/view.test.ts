@@ -174,7 +174,7 @@ describe('the posts view', () => {
           permalink: null,
           remoteId: null,
           publishedAt: null,
-          failure: { code: 'auth_expired', message: 'Instagram permission expired', retryable: true },
+          failure: { code: 'auth_expired', kind: 'authorization', message: 'Instagram permission expired', retryable: true },
         },
       ],
     });

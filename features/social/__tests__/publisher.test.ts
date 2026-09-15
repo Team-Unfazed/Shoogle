@@ -201,7 +201,7 @@ describe('publishing', () => {
 
     const failure = applyPublishOutcome(target, {
       ok: false,
-      failure: { code: 'auth_expired', message: 'Reconnect Instagram.', retryable: true },
+      failure: { code: 'auth_expired', kind: 'authorization', message: 'Reconnect Instagram.', retryable: true },
     });
     expect(failure.status).toBe('failed');
     expect(failure.remoteId).toBeNull();
@@ -232,7 +232,7 @@ describe('publishing', () => {
     const { publisher, store } = build({
       instagram: fakeAdapter('instagram', {
         ok: false,
-        failure: { code: 'auth_expired', message: 'Instagram permission expired.', retryable: true },
+        failure: { code: 'auth_expired', kind: 'authorization', message: 'Instagram permission expired.', retryable: true },
       }),
     });
     await publisher.schedule({ body: 'x', mediaUris: [], targets: ['instagram'], scheduledFor: LATER });

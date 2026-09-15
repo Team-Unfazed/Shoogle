@@ -234,9 +234,29 @@ export type PublishStatus =
   | 'failed'
   | 'skipped';
 
+/**
+ * What KIND of problem this was, which decides what the owner is asked to do.
+ *
+ * Required rather than optional, so every construction site has to decide.
+ * The two need different actions and conflating them wastes the owner's time:
+ *
+ *   `authorization`  Shoogle's permission to post is missing, expired or was
+ *                    revoked, or the platform cannot be reached at all. Retrying
+ *                    changes nothing — the owner must RECONNECT the account.
+ *   `publish`        The platform was reached and refused this particular post:
+ *                    a rejected image, a rate limit, a transient 5xx. The
+ *                    connection is fine; RETRY is the useful action.
+ *
+ * Telling someone to reconnect a working account, or to retry a post that will
+ * be refused identically until they reconnect, is the failure this prevents.
+ */
+export type PublishFailureKind = 'authorization' | 'publish';
+
 export interface PublishFailure {
   /** Stable code for logging and branching. Never shown raw to the owner. */
   code: string;
+  /** Which of the two problems this is, and therefore which action to offer. */
+  kind: PublishFailureKind;
   /** Owner-facing sentence. Must never contain a token, URL or stack. */
   message: string;
   retryable: boolean;
