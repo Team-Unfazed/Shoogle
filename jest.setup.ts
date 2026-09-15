@@ -32,6 +32,24 @@ jest.mock('expo-secure-store', () => ({
   isAvailableAsync: jest.fn().mockResolvedValue(true),
 }));
 
+// expo-image-picker is a native module that throws when its native side is
+// absent. The picker adapter is driven through an injected `ExpoPickerModule`
+// in tests, so this mock only has to keep the import itself from exploding.
+jest.mock('expo-image-picker', () => ({
+  requestMediaLibraryPermissionsAsync: jest
+    .fn()
+    .mockResolvedValue({ granted: false, canAskAgain: true, status: 'undetermined' }),
+  launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true, assets: null }),
+}));
+
+// expo-image-manipulator is a native module too. The preparer is driven
+// through an injected `ImageManipulatorModule` in tests; this only keeps the
+// import alive.
+jest.mock('expo-image-manipulator', () => ({
+  SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
+  ImageManipulator: { manipulate: jest.fn() },
+}));
+
 // AsyncStorage is a native module. The library ships an official in-memory mock
 // for Jest; Supabase's session persistence uses it via lib/supabase/client.ts.
 jest.mock('@react-native-async-storage/async-storage', () =>

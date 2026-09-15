@@ -40,8 +40,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     predictiveBackGestureEnabled: true,
     // Only permissions the foundation actually needs. Feature engineers add
     // their own here and must document why in their feature README.
-    permissions: ['android.permission.INTERNET'],
-    blockedPermissions: [],
+    //
+    // READ_MEDIA_IMAGES (Android 13+) is Social's: the composer lets the owner
+    // attach a photo to a post. Stills only — Shoogle has no video pipeline, so
+    // READ_MEDIA_VIDEO is deliberately absent. See features/social/README.md.
+    permissions: ['android.permission.INTERNET', 'android.permission.READ_MEDIA_IMAGES'],
+    // expo-image-picker's config plugin adds RECORD_AUDIO and CAMERA unless it
+    // is told not to. Shoogle picks existing photos from the gallery and never
+    // records audio or opens the camera, so both are refused below and blocked
+    // here: a marketing app asking for a microphone is how a Play listing earns
+    // a permission it cannot justify.
+    blockedPermissions: [
+      'android.permission.RECORD_AUDIO',
+      'android.permission.CAMERA',
+    ],
     intentFilters: [
       {
         action: 'VIEW',
@@ -71,6 +83,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         dark: { backgroundColor: '#0d0d0d' },
         image: './assets/images/splash-icon.png',
         imageWidth: 160,
+      },
+    ],
+    [
+      'expo-image-picker',
+      {
+        // iOS copy. Android's permission prompt uses the system string, so
+        // there is no Android equivalent to set here.
+        photosPermission:
+          'Shoogle uses your photos so you can attach one to a post you are about to publish.',
+        // Both false BLOCK the permission rather than merely skipping it, so no
+        // other package can reintroduce them. Shoogle has no camera capture and
+        // no audio recording, today or in the planned work.
+        cameraPermission: false,
+        microphonePermission: false,
       },
     ],
     [

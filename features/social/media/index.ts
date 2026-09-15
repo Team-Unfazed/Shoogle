@@ -49,6 +49,41 @@ export {
 } from './host';
 
 export {
+  centredCrop,
+  createExpoMediaPreparer,
+  expoImageManipulatorModule,
+  expoMediaPreparer,
+  PREPARE_FAILED,
+  PREPARE_MEASURE_FAILED,
+  QUALITY_LADDER,
+  saveableFormat,
+  type ExpoPreparerDeps,
+  type ImageManipulatorModule,
+  type ManipulatedImage,
+  type ManipulationRequest,
+  type MeasureBytes,
+  type SaveableFormat,
+} from './expoPreparer';
+
+export {
+  createExpoMediaSource,
+  expoImagePickerModule,
+  expoMediaSource,
+  formatFromMime,
+  kindFromPicked,
+  PICKER_FAILED,
+  PICKER_PERMISSION_BLOCKED,
+  PICKER_PERMISSION_DENIED,
+  toMediaAsset,
+  type ExpoMediaSourceDeps,
+  type ExpoPickerModule,
+  type PickedAsset,
+  type PickerLaunchOptions,
+  type PickerPermission,
+  type PickerResult,
+} from './expoPicker';
+
+export {
   getMediaSource,
   isMeasured,
   MEDIA_SOURCE_NOT_CONFIGURED,
