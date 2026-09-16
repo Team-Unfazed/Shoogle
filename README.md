@@ -8,7 +8,7 @@ development and ships to Google Play as an Android App Bundle via EAS.
 
 > **Status: frontend foundation.** The app shell, design system, routing,
 > provider contracts and testing setup are in place. **No integration is
-> implemented** — not Google Business Profile, Meta, LinkedIn, billing, AI
+> implemented** — not Google Business Profile, Meta, billing, AI
 > generation, website generation, publishing or scheduling. The UI reports this
 > honestly rather than simulating it.
 

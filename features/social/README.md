@@ -3,8 +3,8 @@
 **Owner: Yash**
 
 Instagram, Facebook and Google Business Profile: connecting accounts, composing,
-scheduling and publishing posts, and reading back real performance. LinkedIn is
-out of scope (2026-09-01).
+scheduling and publishing posts, and reading back real performance. Those three
+are the whole of the product's Social scope.
 
 ## Where this appears
 The Posts tab and the create-post flow.
@@ -109,9 +109,9 @@ Indian local business, and it must work normally.
 This is why `availabilityFor()` takes **one** connection rather than a map of
 all of them: a cross-platform dependency is then a type error rather than
 something a reviewer has to notice. The six-row acceptance matrix is executable,
-in `__tests__/independence.test.ts`. LinkedIn is out of scope (2026-09-01) and is the only `ProviderId`
-deliberately missing from `SOCIAL_PLATFORMS` — listing it as an unconnected
-account elsewhere is truthful; targeting it is not supported.
+in `__tests__/independence.test.ts`. `SOCIAL_PLATFORMS` now holds every
+`ProviderId` the product has: LinkedIn was removed from Shoogle entirely on
+2026-09-16, rather than merely being excluded from publishing.
 
 The three are not variations of one thing. Per `docs/research/`, they disagree
 on nearly every rule that decides whether a post can be built:

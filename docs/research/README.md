@@ -71,7 +71,6 @@ confirms it. Never treat an `UNVERIFIED` line as settled.
 
 | Integration | Owner | Why it needs research first |
 |---|---|---|
-| LinkedIn | Yash | Out of scope since 2026-09-01 — kept here only because the row predates that decision |
 | Razorpay | Aryan | Interacts with Google Play billing policy |
 | Gemini | Yash / Devashish | Free-tier data-use terms are unsuitable for real customer data; pricing is model-dependent |
 | Supabase | Sunny | Auth flows and RLS patterns for React Native |
