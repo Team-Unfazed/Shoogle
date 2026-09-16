@@ -92,12 +92,6 @@ export interface InstagramProvider extends ConnectableProvider {
   getInsights(period: string): Result<Metric[]>;
 }
 
-export interface LinkedInProvider extends ConnectableProvider {
-  readonly id: 'linkedin';
-  getAccount(): Result<SocialAccount>;
-  listOrganizations(): Result<{ id: string; name: string }[]>;
-}
-
 /** Draft handed to the publisher. Scheduling is the default (product rule 4). */
 export interface PublishRequest {
   body: string;

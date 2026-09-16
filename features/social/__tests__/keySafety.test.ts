@@ -111,6 +111,129 @@ describe('the Gemini key cannot reach the Expo bundle', () => {
 });
 
 /* ========================================================================== */
+/* Every other server-side secret                                             */
+/* ========================================================================== */
+
+/**
+ * The Gemini key was the first secret this repository had to keep out of the
+ * bundle, and the block above is the proof for that one name. Decision 7 adds
+ * provider credentials — a Meta app secret, a Google OAuth client secret, the
+ * Supabase service-role key, the Razorpay secret and the key that encrypts
+ * provider tokens at rest — and every one of them fails the same way: an
+ * `EXPO_PUBLIC_` prefix turns a secret into a published credential, because an
+ * APK is a zip anyone can download and unzip.
+ *
+ * So the guard is generalised rather than repeated per name. Adding a secret
+ * without adding it here is the mistake this table is meant to make obvious.
+ *
+ * NOTE ON WHAT IS ASSERTED. Naming a secret in prose is how the rule gets
+ * documented; ASSIGNING a public variant or READING it from client code is the
+ * violation. The Gemini block learned this the hard way — its first version
+ * failed on a comment that promised the right thing. The patterns below match
+ * assignment and environment access, never a mention.
+ */
+const SERVER_ONLY_SECRETS = [
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'PROVIDER_CREDENTIAL_ENCRYPTION_KEY',
+  'GOOGLE_OAUTH_CLIENT_SECRET',
+  'META_APP_SECRET',
+  'RAZORPAY_KEY_SECRET',
+  'GEMINI_API_KEY',
+] as const;
+
+/** Server-side, not strictly a credential, but still not for the client. */
+const SERVER_ONLY_CONFIG = ['GOOGLE_OAUTH_CLIENT_ID_WEB'] as const;
+
+/** Directories Metro bundles. Anything here ships to a device. */
+const CLIENT_DIRECTORIES = ['app/', 'components/', 'features/', 'lib/', 'theme/'];
+
+describe('no server-side secret can reach the Expo bundle', () => {
+  it.each([...SERVER_ONLY_SECRETS, ...SERVER_ONLY_CONFIG])(
+    'never assigns an EXPO_PUBLIC_ variant of %s',
+    (name) => {
+      expect(tracked(`EXPO_PUBLIC_${name}[[:space:]]*=[[:space:]]*[^=]`)).toEqual([]);
+    },
+  );
+
+  /**
+   * One file is allowed to name a secret in a `process.env` read, and it is
+   * listed rather than pattern-excused so the exception stays visible.
+   *
+   * `features/seo/ai/gemini.ts` is a DEVELOPMENT-ONLY client whose own header
+   * explains the arrangement: because `GEMINI_API_KEY` carries no
+   * `EXPO_PUBLIC_` prefix, Expo does not inline it, so on a real device
+   * `process.env.GEMINI_API_KEY` is `undefined` and the client reports
+   * `not_connected`. It is additionally gated on `__DEV__` plus fixture mode,
+   * and both non-development EAS profiles force fixture mode off. The read
+   * therefore resolves only in Jest or a Node script, never in a shipped app.
+   *
+   * This is the same treatment `devProxyProvider.ts` gets above. A NEW client
+   * file reading any secret still fails here, which is the point.
+   */
+  const ACKNOWLEDGED_CLIENT_ENV_READERS: Readonly<Record<string, readonly string[]>> = {
+    GEMINI_API_KEY: ['features/seo/ai/gemini.ts'],
+  };
+
+  it.each([...SERVER_ONLY_SECRETS, ...SERVER_ONLY_CONFIG])(
+    'never reads %s from client code',
+    (name) => {
+      const allowed = ACKNOWLEDGED_CLIENT_ENV_READERS[name] ?? [];
+      const readers = tracked(`process\\.env[^\\n]*${name}`)
+        .filter((path) => CLIENT_DIRECTORIES.some((dir) => path.startsWith(dir)))
+        .filter((path) => !allowed.includes(path));
+      expect(readers).toEqual([]);
+    },
+  );
+
+  it('keeps the acknowledged exception list honest', () => {
+    // An allowlist entry for a file that no longer reads the variable is a
+    // permission nobody is using, and the next reader would assume it is load
+    // bearing. Assert each entry still corresponds to a real read.
+    for (const [name, paths] of Object.entries(ACKNOWLEDGED_CLIENT_ENV_READERS)) {
+      const actual = tracked(`process\\.env[^\\n]*${name}`);
+      for (const path of paths) expect(actual).toContain(path);
+    }
+  });
+
+  it.each([...SERVER_ONLY_SECRETS, ...SERVER_ONLY_CONFIG])(
+    'keeps %s out of lib/env, the only route to a public variable',
+    (name) => {
+      const env = readFileSync(join(REPO_ROOT, 'lib', 'env', 'index.ts'), 'utf8');
+      expect(env).not.toMatch(new RegExp(name));
+    },
+  );
+
+  it.each([...SERVER_ONLY_SECRETS, ...SERVER_ONLY_CONFIG])(
+    'declares %s unprefixed in the env example, so its correct home is documented',
+    (name) => {
+      const example = readFileSync(join(REPO_ROOT, '.env.local.example'), 'utf8');
+      expect(example).toMatch(new RegExp(`^${name}=`, 'm'));
+      expect(example).not.toMatch(new RegExp(`^EXPO_PUBLIC_${name}=`, 'm'));
+    },
+  );
+
+  /**
+   * `lib/env` is the ONLY module that reads `process.env`, and everything it
+   * exports is publishable by design. Pinning the exported keys means a new
+   * entry has to be added deliberately here as well — which is the moment
+   * someone notices they are about to publish a secret.
+   */
+  it('exposes exactly the publishable values, and nothing else', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { env } = require('@/lib/env') as { env: Record<string, unknown> };
+    expect(Object.keys(env).sort()).toEqual(
+      [
+        'googleOAuthClientIdAndroid',
+        'metaAppId',
+        'razorpayKeyId',
+        'supabaseAnonKey',
+        'supabaseUrl',
+      ].sort(),
+    );
+  });
+});
+
+/* ========================================================================== */
 /* The dev proxy provider                                                     */
 /* ========================================================================== */
 

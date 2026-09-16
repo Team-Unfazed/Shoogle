@@ -45,6 +45,7 @@ import * as ImagePicker from 'expo-image-picker';
 import type { Result } from '@/lib/providers/types';
 import { failed, ready, unavailable } from '@/lib/state/DataState';
 
+import { newUuid } from '../ids';
 import type { MediaAsset, MediaFormat, MediaKind } from '../types';
 
 import type { MediaSource, PickOptions } from './probe';
@@ -199,8 +200,8 @@ export function createExpoMediaSource(deps: ExpoMediaSourceDeps = {}): MediaSour
   const picker = deps.picker ?? expoImagePickerModule;
   const now = deps.now ?? (() => new Date());
 
-  let counter = 0;
-  const newId = deps.newId ?? (() => `media-${(counter += 1)}`);
+  // Media ids travel inside `posts.content`, so they are storable too.
+  const newId = deps.newId ?? newUuid;
 
   return {
     id: 'expo-image-picker',

@@ -410,7 +410,6 @@ const PROVIDER_ICON: Record<ProviderId, React.ComponentProps<typeof Ionicons>['n
   google_business: 'business-outline',
   instagram: 'logo-instagram',
   facebook: 'logo-facebook',
-  linkedin: 'logo-linkedin',
 };
 
 /**

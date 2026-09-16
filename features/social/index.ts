@@ -12,9 +12,9 @@
  * completes a real OAuth flow — not before.
  *
  * SCOPE: Instagram, Facebook and Google Business Profile, in any combination
- * the owner chooses. LinkedIn was removed from scope on 2026-09-01 and is the
- * one `ProviderId` deliberately absent from `SOCIAL_PLATFORMS`; see the comment
- * there for why it still exists elsewhere.
+ * the owner chooses. That is the whole of it — LinkedIn left publishing scope
+ * on 2026-09-01 and was removed from the product entirely on 2026-09-16, so it
+ * is no longer a `ProviderId`.
  */
 
 /* -- Domain -------------------------------------------------------------- */

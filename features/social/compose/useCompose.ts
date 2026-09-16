@@ -21,6 +21,7 @@ import { useCallback, useMemo, useReducer, useState } from 'react';
 import { unwrapOrNull } from '@/lib/state/DataState';
 
 import { createSocialGenerator, type BusinessContext, type ContentObjective } from '../generation';
+import { newUuid } from '../ids';
 import type { PostStore } from '../store';
 import type { Platform, SocialPost } from '../types';
 
@@ -69,7 +70,8 @@ export function useCompose(options: UseComposeOptions): UseCompose {
   const [saving, setSaving] = useState(false);
 
   const now = options.now ?? (() => new Date().toISOString());
-  const newId = options.newId ?? (() => `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  // A saved draft is a persisted row, so its id has to be storable.
+  const newId = options.newId ?? newUuid;
 
   const objectiveFor = useCallback(
     (platform: Platform): ContentObjective => ({

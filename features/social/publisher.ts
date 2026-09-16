@@ -4,8 +4,8 @@
  * ==================== THERE IS NO FAKE PUBLISHING HERE =====================
  *
  * `createSocialPublisher()` is constructed with a map of `PlatformPublisher`s.
- * That map is EMPTY in the app today, because no Instagram, Facebook, LinkedIn
- * or Google Business publishing integration exists: none of them has been
+ * That map is EMPTY in the app today, because no Instagram, Facebook or
+ * Google Business publishing integration exists: none of them has been
  * researched (`platforms.ts`), no OAuth flow completes, and no credential is
  * present. With an empty map:
  *
@@ -58,6 +58,7 @@ import {
   type PreparedMedia,
   type PublishableMedia,
 } from './media';
+import { newUuid } from './ids';
 import { transition, toSharedStatus, type PostState } from './postState';
 import { validateSchedule } from './scheduling';
 import type { PostStore } from './store';
@@ -395,13 +396,9 @@ export function createSocialPublisher(deps: SocialPublisherDeps): ShooglePublish
     );
   }
 
-  let counter = 0;
-  const newId =
-    deps.newId ??
-    (() => {
-      counter += 1;
-      return `post-${now().getTime()}-${counter}`;
-    });
+  // Posts and their media are headed for `uuid` columns, so the default mints
+  // one. Tests inject a deterministic generator through `deps.newId`.
+  const newId = deps.newId ?? newUuid;
 
   const reachable = (): Platform[] =>
     SOCIAL_PLATFORMS.filter((platform) => publishers[platform] !== undefined);

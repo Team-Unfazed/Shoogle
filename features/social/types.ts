@@ -38,12 +38,15 @@ import type { PostState } from './postState';
  * second composer for it (see that feature's README); the publisher below is
  * the single authoring path.
  *
- * WHY THIS LIST IS SHORTER THAN `ProviderId`
- * ------------------------------------------
- * `linkedin` is deliberately absent. It was removed from scope on 2026-09-01
- * by the product owner. It survives in `ProviderId` and in the Business tab's
- * account list because those are shared, and listing LinkedIn as an
- * unconnected account is *truthful* — it is simply never a publishing target.
+ * WHY THIS LIST NOW COINCIDES WITH `ProviderId`
+ * ---------------------------------------------
+ * It did not always. `ProviderId` once carried a fourth member, `linkedin`,
+ * which was never a publishing target and survived only so the Business tab
+ * could list it as an unconnected account. It was removed from the product
+ * entirely on 2026-09-16, so the two lists happen to hold the same three
+ * platforms today. They are still separate vocabularies: the assertion below
+ * checks that every Platform is a ProviderId, NOT that the reverse holds, so a
+ * future non-publishing provider can be added without touching this array.
  *
  * A platform Shoogle can never publish to does not belong in this array,
  * because every capability check, target picker and publisher loop iterates it.
@@ -333,6 +336,41 @@ export function isConfirmedPublished(target: PublishTarget): boolean {
  * Every field is nullable and `reportedAt` is null until a provider actually
  * answered. A post published five minutes ago has `reach: null`, not `reach: 0`
  * — nobody has counted yet.
+ *
+ * ============ RUNTIME ONLY. DURABLE STORAGE IS DEFERRED (2026-09-16) =========
+ *
+ * Decision 6 kept post-level metrics OUT of the Phase 1 `metric_snapshots`
+ * design, and deliberately did not reserve a `post_target_id` column. Nothing
+ * writes this type today — `publisher.ts` sets `insights: null` after every
+ * publish, because publishing tells us a post went out, not how it did.
+ *
+ * The reason is capability, not effort: **no supported platform has a verified
+ * post-level metric source.**
+ *
+ *   Google Business Profile  Post performance was REMOVED from the API on
+ *                            2023-02-20 and not replaced. See
+ *                            `LOCAL_POST_VIEWS_SEARCH` and
+ *                            `LOCAL_POST_ACTIONS_CALL_TO_ACTION` in
+ *                            `features/seo/metrics.ts` → `REMOVED_METRICS`.
+ *                            This is permanent, not pending.
+ *   Instagram                UNVERIFIED. `docs/research/meta-instagram.md` §1
+ *                            selects Instagram Login, lists its four scopes,
+ *                            and records that the accepted trade-off gives up
+ *                            insights. No insights scope appears on that path.
+ *   Facebook                 No provider contract exists yet, so there is no
+ *                            seam to collect through.
+ *
+ * Run `api-researcher` against the Instagram and Facebook insight surfaces
+ * before designing storage for this. Guessing the shape is the expensive
+ * mistake (`CLAUDE.md`, rule 11).
+ *
+ * ⚠️ WHEN IT IS PERSISTED, IT MUST NOT BE PERSISTED IN THIS SHAPE.
+ * `SocialPost.insights` is ONE field for a post that may have three targets, so
+ * it cannot say whose reach a number is. Reach is per-platform, and `remoteId`
+ * — the only proof a post published at all — lives on the target. A durable row
+ * must therefore key on the TARGET, never on the post. Storing this shape as-is
+ * would reproduce, one layer up, the exact "one platform's result presented as
+ * the post's result" failure that `PublishTarget` exists to prevent.
  */
 export interface PostInsights {
   reach: number | null;

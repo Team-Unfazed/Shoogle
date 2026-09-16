@@ -41,8 +41,31 @@ export const FETCHED = '2026-08-29T00:00:00.000Z';
 const business: Business = {
   id: 'test-business',
   name: 'Sunrise Salon',
+  // Neighbourhood and city are separate fields, so this is the neighbourhood
+  // alone. It used to read 'Nerul, Navi Mumbai' because `locality` was the only
+  // place to put either.
+  locality: 'Nerul',
+  city: 'Navi Mumbai',
   category: 'salon',
-  locality: 'Nerul, Navi Mumbai',
+  timezone: 'Asia/Kolkata',
+};
+
+/**
+ * A business as `create_business()` leaves it: a real row with a real id, and
+ * nothing said about it yet. Sign-up creates this shape so the owner is never
+ * held at a form, so every check has to cope with it.
+ *
+ * Note what is NOT here: no placeholder name and no `category: 'other'`. Those
+ * would be answers, and nobody has answered. `timezone` is the one field that
+ * is defaulted, because scheduling needs a zone from the first moment and a
+ * zone asserts nothing about the business.
+ */
+export const bareBusiness: Business = {
+  id: 'test-business',
+  name: null,
+  category: null,
+  locality: null,
+  city: null,
   timezone: 'Asia/Kolkata',
 };
 

@@ -25,6 +25,19 @@ jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
 }));
 
+// expo-crypto is a native module. Its JS side does NOT throw when the native
+// side is missing — `randomUUID()` simply returns undefined — so without this
+// mock every default-generated id would silently be unusable. `features/social/ids.ts`
+// rejects such a value at runtime; this keeps tests on the working path.
+// Deterministic and monotonic, so a failing test names a specific id.
+let mockUuidCounter = 0;
+jest.mock('expo-crypto', () => ({
+  randomUUID: jest.fn(() => {
+    mockUuidCounter += 1;
+    return `00000000-0000-4000-8000-${mockUuidCounter.toString(16).padStart(12, '0')}`;
+  }),
+}));
+
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn().mockResolvedValue(null),
   setItemAsync: jest.fn().mockResolvedValue(undefined),

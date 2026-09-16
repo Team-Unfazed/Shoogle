@@ -75,11 +75,12 @@ describe('a limit may only be claimed with a source', () => {
 });
 
 /**
- * The scope decision, asserted rather than described. LinkedIn was removed on
- * 2026-09-01 and remains a valid `ProviderId`, which is exactly why a test has
- * to hold the line here. Facebook was briefly removed too, on a misreading that
- * Meta was only an Instagram authentication detail; it was restored on
- * 2026-09-09 as a first-class target with its own content shape.
+ * The scope decision, asserted rather than described. LinkedIn left publishing
+ * scope on 2026-09-01 and was removed from the product altogether on
+ * 2026-09-16, so it is no longer a `ProviderId` at all. Facebook was briefly
+ * removed too, on a misreading that Meta was only an Instagram authentication
+ * detail; it was restored on 2026-09-09 as a first-class target with its own
+ * content shape. The test holds that line.
  */
 describe('publishing scope', () => {
   it('targets Instagram, Facebook and Google Business Profile, and nothing else', () => {

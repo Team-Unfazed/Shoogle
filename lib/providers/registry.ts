@@ -36,7 +36,6 @@ const DISPLAY_NAMES: Record<ProviderId, string> = {
   google_business: 'Google Business Profile',
   instagram: 'Instagram',
   facebook: 'Facebook',
-  linkedin: 'LinkedIn',
 };
 
 const registry = new Map<ProviderId, ConnectableProvider>();
@@ -86,7 +85,6 @@ export const ALL_PROVIDER_IDS: readonly ProviderId[] = [
   'google_business',
   'instagram',
   'facebook',
-  'linkedin',
 ] as const;
 
 export function getProviderDisplayName(id: ProviderId): string {
