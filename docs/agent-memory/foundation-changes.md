@@ -1291,9 +1291,11 @@ remain on the critical path.
 ## What I changed
 
 Wrote the first real Shoogle database schema as local, version-controlled
-migrations. **Nothing was applied to the remote project.** No `supabase db push`,
-no `db reset`, no dashboard action. The linked project is untouched; these are
-files on disk awaiting review.
+migrations. **Nothing was applied to the remote project** *at the time of this
+session*. No `supabase db push`, no `db reset`, no dashboard action; the linked
+project was untouched and these were files on disk awaiting review.
+**Superseded by session 12: the schema has since been applied to the remote
+project.**
 
 Four requirements from Decisions 1-7 were underspecified and were resolved by
 the product owner before any SQL was written, rather than guessed: `posts.media`
@@ -1405,7 +1407,8 @@ matters more than the diff.**
 
 Still open, plus smaller observations:
 
-3. **`supabase/` is untracked.** The migrations are not in version control yet.
+3. ~~**`supabase/` is untracked.**~~ RESOLVED in session 12: committed as
+   `2a7dbb3`, and the branch has been pushed.
 4. **`metric_definitions` is empty**, so `metric_snapshots` currently rejects
    every insert. Deliberate — nothing writes metrics — but it means the table is
    not usable until the collector seeds it.
@@ -1443,11 +1446,104 @@ Everything from sessions 1-10, plus:
 
 ## Next recommended step
 
-`git add supabase/` so the schema is under version control — it is still
-untracked, which is the largest gap left in this session's work. Only then
-consider applying to the remote project, which still requires the review gate the
-handover sets out.
+**Superseded by session 12 — both steps below are now done.** `git add supabase/`
+(committed as `2a7dbb3`) and applying to the remote project, whose review gate
+was cleared by Decisions 1-8 being approved one at a time.
 
 A lesson worth carrying: both defects in this schema were invisible to review and
 obvious to execution. Any future migration should be applied to a disposable
 database and probed before it is considered reviewed.
+
+---
+
+## Date
+
+2026-09-16 (session 12 — the Phase 1 schema applied to the remote project)
+
+## What I changed
+
+Nothing in the repository except this log. The change is to the world outside it:
+**the Phase 1 schema now exists on the remote Supabase project.**
+
+`npx supabase db push` applied all six migrations to project
+**`dkzizcaapnpkvmcmobfr`**, in order and without error:
+
+```
+20260916120000_schemas_and_helpers.sql
+20260916120100_profiles.sql
+20260916120200_businesses_and_membership.sql
+20260916120300_provider_connections.sql
+20260916120400_posts.sql
+20260916120500_metrics.sql
+```
+
+`npx supabase migration list` then reported all six present remotely with
+versions matching local exactly — no migration skipped, none left pending.
+
+The review gate the handover set for this was cleared first: Decisions 1-8 were
+each approved individually, the SQL was reviewed statement by statement, two real
+defects were found by executing it and were fixed, and all five commits were
+pushed to `origin/feature/yash-social` before anything touched the remote.
+
+## Files changed
+
+```
+docs/agent-memory/foundation-changes.md   this entry, plus three stale
+                                          session-11 statements corrected
+```
+
+No application code, no migrations, no `package-lock.json`.
+
+## Decisions made
+
+None. This session executed an already-approved plan; it settled nothing new.
+
+## Current state
+
+- The remote project holds the Phase 1 schema as defined by the six migrations:
+  the eight `public` tables, the `private` schema with `provider_credentials`,
+  the membership helper functions, `create_business()`, the last-owner constraint
+  trigger, the RLS policies and the grant/revoke configuration.
+- The repository is unchanged from `3d3c195` apart from this entry.
+- `npm run typecheck`, `npm run lint` and the Jest suite were last green at
+  `3d3c195`: 2744 passed, 1 skipped, 62 suites.
+
+**What was verified, precisely.** The `db push` output and `migration list` are
+the evidence: they establish which migrations RAN and that local and remote
+histories agree. They do not describe the resulting objects.
+
+## Known issues
+
+1. **Remote drift was NOT verified.** `npx supabase db diff --linked` could not
+   run: it builds a shadow database in Docker and the local daemon was not
+   running (`LegacyImagePrepullError`). So no comparison between the remote
+   schema and these migrations has been performed, and none should be claimed.
+2. **No direct inspection of the remote objects was performed.** Nobody has
+   queried the remote for its tables, policies, grants or functions. That the
+   migrations applied cleanly is good evidence they produced what they describe,
+   but it is inference, not observation. Verifying it needs either Docker (for
+   `db diff`) or a direct psql session with the database password.
+3. **`metric_definitions` is empty on the remote**, so `metric_snapshots` will
+   reject every insert until a collector seeds it. Deliberate — nothing writes
+   metrics yet — but it is now true of a real database rather than a plan.
+4. Carried over from session 11: nothing creates a `profiles` row;
+   `provider_connections` does not constrain `status` against `disconnected_at`;
+   `metric_snapshots` has no `updated_at`.
+
+## Things future engineers must NOT change
+
+Everything from sessions 1-11. The rules that previously protected a design now
+protect live tables, so the cost of breaking one has gone up:
+
+- **The remote schema is migration-managed.** Do not create, alter or drop
+  objects through the Supabase dashboard. A dashboard change is invisible to
+  `supabase/migrations/` and the next `db push` will not know about it.
+- **Do not edit an applied migration file.** These six are now part of the remote
+  history. Change the schema with a NEW timestamped migration.
+
+## Next recommended step
+
+Verify the deployment independently, since this session could not:
+`npx supabase db diff --linked` with Docker running, or
+`psql "<connection string>" -f supabase/tests/rls_verification.sql`, which is
+transactional and rolls back. Then Decision 9.
