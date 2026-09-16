@@ -69,17 +69,32 @@ const B1: CheckDefinition = {
       });
     }
 
+    // Null when nobody has named this business to Shoogle yet. The header above
+    // already establishes the shape of this check: with a website we compare
+    // three names, without one we compare two, and both are real measurements.
+    // A missing Shoogle name is the same situation one source further down —
+    // we compare what we have, and if that leaves nothing to compare we say so.
     const shoogleName = owner.declaredName ?? owner.business.name;
     const websiteState = ctx.observations.website;
     const siteName =
       websiteState.status === 'ready' ? websiteState.value.siteBusinessName : null;
 
     const gbpKey = normaliseBusinessName(location.title);
-    const ownKey = normaliseBusinessName(shoogleName);
+    const ownKey = shoogleName === null ? null : normaliseBusinessName(shoogleName);
     const siteKey = siteName === null ? null : normaliseBusinessName(siteName);
 
+    // Nothing to compare Google against. `pass()` here would report "your name
+    // is consistent everywhere" on the strength of a single source, which is a
+    // claim about sources we never read.
+    if (ownKey === null && siteKey === null) {
+      return notChecked(
+        'insufficient_data',
+        'We only have the name on your Google listing, so there is nothing to compare it against yet.',
+      );
+    }
+
     const mismatches: string[] = [];
-    if (gbpKey !== ownKey) mismatches.push(`Shoogle has "${shoogleName}"`);
+    if (ownKey !== null && gbpKey !== ownKey) mismatches.push(`Shoogle has "${shoogleName}"`);
     if (siteKey !== null && siteKey !== gbpKey) mismatches.push(`your website says "${siteName}"`);
 
     if (mismatches.length === 0) return pass();
@@ -93,7 +108,7 @@ const B1: CheckDefinition = {
       observation: `Name mismatch across sources: ${mismatches.join('; ')}.`,
       evidence: [
         `Google: ${location.title}`,
-        `Shoogle: ${shoogleName}`,
+        ...(shoogleName === null ? [] : [`Shoogle: ${shoogleName}`]),
         ...(siteName === null ? [] : [`Website: ${siteName}`]),
       ],
       confidence: 'inferred',

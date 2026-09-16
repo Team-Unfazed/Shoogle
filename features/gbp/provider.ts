@@ -131,6 +131,35 @@ import { createGbpWriteQueue, type GbpWriteQueue } from './writeQueue';
  * the OAuth client secret from reaching the device, and every `EXPO_PUBLIC_*`
  * value ships readable inside the APK. Nothing in this folder may perform a
  * code-for-token exchange.
+ *
+ * ========== MIGRATION BLOCKER — THIS SHAPE DOES NOT SURVIVE (2026-09-16) =====
+ *
+ * Decision 7 chose a **server relay** (7j/J1a): the mobile client never holds a
+ * provider access or refresh token at all. Requests keep being built here, but
+ * the adapter posts them to a Shoogle endpoint that resolves the credential
+ * server-side and forwards to Google. Under that design `accessToken` has no
+ * place on the device, and this interface is the one thing standing in the way.
+ *
+ * It is recorded rather than changed because changing it means building the
+ * relay, and a rewritten seam with no server behind it would be a worse lie
+ * than an honest blocker. Nothing constructs a `GbpSession` in the app today —
+ * `getSession` is injected and `transport` defaults to `null` — so no token
+ * currently exists on any device.
+ *
+ * ⚠️ UNTIL THE RELAY EXISTS:
+ *   - `accessToken` is EPHEMERAL. Never persist it — not in AsyncStorage, not
+ *     in SecureStore, not in a store, not in component state that outlives a
+ *     request. `__tests__/credential-boundary.test.ts` guards device storage.
+ *   - It is NOT a durable credential. It carries no refresh token and no
+ *     expiry, so it cannot be refreshed and cannot be reasoned about after the
+ *     moment it is handed over. Adding those fields here would be building the
+ *     server's credential record on the client.
+ *   - It must never be logged, and never reach an owner-facing message.
+ *
+ * `provider_connections` (client-readable metadata) and
+ * `private.provider_credentials` (server-only ciphertext) are the durable
+ * homes. Neither exists yet. See `docs/agent-memory/foundation-changes.md`,
+ * session 10.
  */
 export interface GbpSession {
   accessToken: string;
@@ -143,7 +172,21 @@ export interface GbpSession {
   lastSyncedAt: string | null;
 }
 
-/** The single point where this feature would touch the network. */
+/**
+ * The single point where this feature would touch the network.
+ *
+ * Under Decision 7's relay design this is the seam that changes: the
+ * implementation posts a `GbpRequest` to a Shoogle endpoint which attaches the
+ * credential, rather than calling Google with a token the client was given. The
+ * `accessToken` parameter goes away with it. Everything above this line —
+ * endpoint construction, decoding, error classification, the Voice of Merchant
+ * gate and the edit queue — is unaffected, which is why the relay was chosen
+ * over relocating the whole feature.
+ *
+ * A relay whose request is client-controlled is a confused-deputy risk, so the
+ * server side must enforce an endpoint allowlist and resolve the business from
+ * the caller's session and membership — never from anything the client sends.
+ */
 export interface GbpTransport {
   send(request: GbpRequest, accessToken: string): Promise<GbpTransportOutcome>;
 }

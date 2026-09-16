@@ -12,6 +12,7 @@ import { unavailable } from '@/lib/state/DataState';
 
 import { runAuditEngine } from '../engine';
 import {
+  bareBusiness,
   input,
   ok,
   locationDetail,
@@ -530,5 +531,90 @@ describe('I1 / I2 / I3 — the website checks', () => {
     expect(outcome(down, 'I1').kind).toBe('fail');
     expect(outcome(down, 'I2').kind).toBe('not_applicable');
     expect(outcome(down, 'I3').kind).toBe('not_applicable');
+  });
+});
+
+
+/**
+ * A BUSINESS NOBODY HAS DESCRIBED YET
+ * -----------------------------------
+ * `create_business()` creates a row with `name`, `category` and `locality` all
+ * null, so the owner is never held at a form on sign-up. Null means nobody has
+ * told Shoogle — it is NOT `category: 'other'` (a real answer meaning "none of
+ * the eight") and NOT a placeholder name.
+ *
+ * Every check that reads one of those fields therefore has to reach an honest
+ * outcome without them. The rule these tests hold is the one the audit already
+ * applies everywhere else: an unmeasured check is `not_checked`. It is never a
+ * `pass` (which would credit the business for something nobody checked), never
+ * a `fail` (which would blame them for it), and — for D4 — never
+ * `not_applicable`, because that leaves the denominator entirely and so claims
+ * we know the check does not apply.
+ */
+describe('a business with no name or category recorded', () => {
+  const bare = (overrides: Partial<AuditInput['observations']> = {}): AuditInput =>
+    input({
+      owner: ok(ownerContext({ business: bareBusiness, declaredName: null })),
+      ...overrides,
+    });
+
+  it('B1 does not claim the name is consistent when it has only one source', () => {
+    const result = outcome(bare({ website: unavailable('not_connected', 'No website.') }), 'B1');
+    expect(result.kind).toBe('not_checked');
+    if (result.kind === 'not_checked') expect(result.reason).toBe('insufficient_data');
+    expect(findingFor(bare({ website: unavailable('not_connected', 'No website.') }), 'B1')).toBeUndefined();
+  });
+
+  it('B1 still compares Google against the website when only Shoogle’s name is missing', () => {
+    // Two sources is a real measurement — losing the third must not stop it.
+    const mismatch = bare({
+      website: ok(websiteObservation({ siteBusinessName: 'Completely Different Name' })),
+    });
+    expect(outcome(mismatch, 'B1').kind).toBe('warn');
+    // The absent name must not appear in the evidence as an empty or null line.
+    const evidence = findingFor(mismatch, 'B1')?.evidence ?? [];
+    expect(evidence.some((line) => line.startsWith('Shoogle:'))).toBe(false);
+    expect(evidence.join(' ')).not.toContain('null');
+  });
+
+  it('C2 refuses to judge the Google category against a category nobody gave', () => {
+    const result = outcome(bare(), 'C2');
+    expect(result.kind).toBe('not_checked');
+    if (result.kind === 'not_checked') expect(result.reason).toBe('insufficient_data');
+    expect(findingFor(bare(), 'C2')).toBeUndefined();
+  });
+
+  it('D4 is not_checked, not not_applicable, when the kind of business is unknown', () => {
+    const result = outcome(bare(), 'D4');
+    expect(result.kind).toBe('not_checked');
+    if (result.kind === 'not_checked') expect(result.reason).toBe('insufficient_data');
+  });
+
+  it('D4 stays not_applicable when the owner genuinely told us a category it does not apply to', () => {
+    // The contrast that matters: 'salon' is an answer, null is not.
+    const salon = input({ owner: ok(ownerContext()) });
+    expect(outcome(salon, 'D4').kind).toBe('not_applicable');
+  });
+
+  it('never blames the owner for the facts they have not given yet', () => {
+    // A bare business has told Shoogle nothing. Not one check may turn that
+    // silence into a finding against them.
+    for (const id of ['B1', 'C2', 'D4'] as const) {
+      expect(outcome(bare(), id).kind).not.toBe('fail');
+    }
+  });
+
+  it('names the checks that could not run rather than dropping them', () => {
+    expect(runAuditEngine(bare()).uncheckedAreas.length).toBeGreaterThan(0);
+  });
+
+  it('passes B1 only on sources it genuinely read', () => {
+    // The default scenario has Google and the website both saying the same
+    // name. Those are two real sources that genuinely agree, so a pass is
+    // honest even with no name recorded in Shoogle — the missing third source
+    // cannot make the two we did read disagree. Contrast the first test in this
+    // block, where the website is gone and one source is left: that is
+    // not_checked, because a lone source is not a comparison.
+    expect(outcome(bare(), 'B1').kind).toBe('pass');
   });
 });

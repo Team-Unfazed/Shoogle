@@ -27,7 +27,7 @@ any integration exists.
 |---|---|
 | `GoogleBusinessProfileProvider` | Pranay |
 | `AuditProvider`, `SeoProvider` | Pranay |
-| `InstagramProvider`, `LinkedInProvider`, `SocialPublisher` | Yash |
+| `InstagramProvider`, `SocialPublisher` | Yash |
 | `WebsiteGenerator` | Devashish |
 | `BillingProvider` | Aryan |
 | `AuthProvider` | Sunny |

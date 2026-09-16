@@ -63,6 +63,13 @@ export function MediaPlaceholder({
 /* Next up                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The next-up actions are 40px tall in "Shoogle Social.dc.html", 4px under
+ * Android's 44pt minimum touch target. Rather than break the transcribed
+ * geometry, 2px of vertical hitSlop takes the real target to 44.
+ */
+const NEXT_UP_HIT_SLOP = { top: 2, bottom: 2, left: 0, right: 0 } as const;
+
 export function NextUpCard({
   label,
   title,
@@ -103,6 +110,10 @@ export function NextUpCard({
           onPress={onPreview}
           accessibilityRole="button"
           accessibilityLabel="Preview this post"
+          // The design draws these at 40px, which is under Android's 44pt
+          // floor. hitSlop makes the target compliant without altering the
+          // transcribed geometry.
+          hitSlop={NEXT_UP_HIT_SLOP}
           android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
           style={({ pressed }) => [
             styles.nextUpPrimary,
@@ -118,6 +129,7 @@ export function NextUpCard({
           onPress={onEdit}
           accessibilityRole="button"
           accessibilityLabel="Edit this post"
+          hitSlop={NEXT_UP_HIT_SLOP}
           style={({ pressed }) => [
             styles.nextUpSecondary,
             {

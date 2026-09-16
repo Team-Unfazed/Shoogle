@@ -105,7 +105,9 @@ jobs:
       - name: Reject service-role key reaching the app
         run: |
           # The service role key must never be importable from client code.
-          if git grep -I -n "SUPABASE_SERVICE_ROLE_KEY" -- app components features lib theme; then
+          # Test files NAME the variable to assert it never reaches client code.
+          # Naming it is the guard; READING it is the violation.
+          if git grep -I -n "SUPABASE_SERVICE_ROLE_KEY" -- app components features lib theme ':!*__tests__*'; then
             echo "::error::SUPABASE_SERVICE_ROLE_KEY referenced in client code. It must stay server-side."
             exit 1
           fi

@@ -215,14 +215,18 @@ describe('Business', () => {
     mockFixtures = false;
     await renderScreen('business', BusinessScreen);
 
-    // All four providers are listed by name...
+    // All three providers are listed by name...
     expect(screen.getByText('Google Business Profile')).toBeOnTheScreen();
     expect(screen.getByText('Instagram')).toBeOnTheScreen();
     expect(screen.getByText('Facebook')).toBeOnTheScreen();
-    expect(screen.getByText('LinkedIn')).toBeOnTheScreen();
 
     // ...and none is claimed to be connected.
     expect(screen.queryByText('Connected')).toBeNull();
+
+    // LinkedIn was removed from the product on 2026-09-16. Listing it as an
+    // unconnected account would imply Shoogle will connect it one day, which
+    // it never will — so the row must be absent, not merely disconnected.
+    expect(screen.queryByText('LinkedIn')).toBeNull();
   });
 
   it('shows unmeasured visibility rather than a zero', async () => {

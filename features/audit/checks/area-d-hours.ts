@@ -337,7 +337,21 @@ const D4: CheckDefinition = {
     if (!got.ok) return got.evaluation;
     const { location, owner } = got.data;
 
-    if (!DEPARTMENT_HOURS_CATEGORIES.includes(owner.business.category)) {
+    // `not_applicable` leaves the denominator entirely (§2.1), so it may only be
+    // returned when we genuinely know this check does not apply. With no
+    // category recorded we do not know that — saying "your kind of business
+    // does not usually have separate department hours" would be asserting
+    // something about a business nobody has described to us. Unmeasured, not
+    // excused.
+    const category = owner.business.category;
+    if (category === null) {
+      return notChecked(
+        'insufficient_data',
+        'We do not know what kind of business this is yet, so we cannot say whether department hours apply.',
+      );
+    }
+
+    if (!DEPARTMENT_HOURS_CATEGORIES.includes(category)) {
       return notApplicable('Your kind of business does not usually have separate department hours.');
     }
 
@@ -346,11 +360,7 @@ const D4: CheckDefinition = {
     if (more.items.length > 0) return pass();
 
     const example =
-      owner.business.category === 'clinic'
-        ? 'doctor hours'
-        : owner.business.category === 'restaurant'
-          ? 'delivery hours'
-          : 'staffed hours';
+      category === 'clinic' ? 'doctor hours' : category === 'restaurant' ? 'delivery hours' : 'staffed hours';
     return warn(0.5, {
       title: `Your ${example} are not listed separately`,
       detail:

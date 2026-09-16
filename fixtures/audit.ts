@@ -41,6 +41,7 @@ const fixtureBusiness: Business = {
   name: '[FIXTURE] Example Salon',
   category: 'salon',
   locality: '[FIXTURE] Example Locality',
+  city: '[FIXTURE] Example City',
   timezone: 'Asia/Kolkata',
 };
 

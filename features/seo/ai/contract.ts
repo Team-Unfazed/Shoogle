@@ -140,7 +140,32 @@ export type AiTask =
    * and submits it themselves, and Google then moderates what they submitted.
    * Added for `app/seo/review-reply.tsx`.
    */
-  | 'review_reply';
+  | 'review_reply'
+  /* ------------------------------------------------------------------------
+   * ADDED BY YASH — 2026-09-11, coordination change. Owner of this file is
+   * Pranay; flagged to him rather than made silently.
+   *
+   * Strictly additive: two new members on this union and nothing else. No
+   * existing task, guard, provider behaviour or SEO code was touched, and
+   * every implementation of `AiProvider` keeps working unchanged because
+   * `AiTask` is only ever read, never exhaustively switched on, in this file.
+   *
+   * WHY IT WAS NEEDED. `features/social` generates post copy, and this union
+   * is closed on purpose so "every prompt shipped is reviewable in the
+   * repository instead of assembled at a call site" (see the comment above it).
+   * That property is worth keeping, so the alternative — a second Gemini
+   * client inside `features/social` — was rejected: it would have duplicated
+   * the data-classification guards and given real customer data two doors out
+   * instead of one. Adding two members keeps exactly one door.
+   *
+   * The social prompts themselves live in
+   * `features/social/generation/prompts/`, one per platform, and are reviewable
+   * there.
+   * --------------------------------------------------------------------- */
+  /** Draft a social post caption for one platform. */
+  | 'social_caption'
+  /** Draft heading/body copy for the slides of one carousel. */
+  | 'social_slide_copy';
 
 export interface AiTextRequest {
   readonly task: AiTask;

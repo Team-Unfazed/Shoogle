@@ -54,3 +54,5 @@ coverage/
 android/
 ios/
 .expo-export-check/
+
+supabase/.temp/

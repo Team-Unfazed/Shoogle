@@ -119,7 +119,13 @@ const C2: CheckDefinition = {
       }
     }
 
-    const markers = CATEGORY_MARKERS[owner.business.category];
+    // A null category is "the owner has not told us what they do", which is a
+    // different fact from `other` ("they told us, and it is none of the eight").
+    // Both land here because both leave nothing to judge the Google category
+    // against — but neither may be read as a category the owner chose, so this
+    // is `not_checked`, never a pass and never a fail.
+    const category = owner.business.category;
+    const markers = category === null ? [] : CATEGORY_MARKERS[category];
     if (markers.length === 0) {
       return notChecked(
         'insufficient_data',
